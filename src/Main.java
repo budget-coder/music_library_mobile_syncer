@@ -171,7 +171,6 @@ public class Main {
             ReadOnlyFileException, InvalidAudioFrameException, CannotWriteException {
         MP3File mp3FileSrc = (MP3File) AudioFileIO.read(fileSrc);
         AbstractID3v2Tag v2TagSrc = mp3FileSrc.getID3v2Tag();
-        // Tag info: https://en.wikipedia.org/wiki/ID3, https://picard.musicbrainz.org/docs/mappings/
         List<String> listOfTagsSrc = new ArrayList<>();
         // NOTE: Both lists must contain each tag in the same order!
         listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_TITLE));
