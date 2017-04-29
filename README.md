@@ -1,9 +1,9 @@
-# music_library_mobile_syncer
+# Music Library Mobile Syncer
 A Java program for syncing your local music library to your Android, or similar, device.
 
-Usage:
-<To be filled out...>
+## Usage: <br />
+To be filled out...
 
-Useful links:
-Tag info: https://en.wikipedia.org/wiki/ID3, https://picard.musicbrainz.org/docs/mappings/
-Tag mappings: https://picard.musicbrainz.org/docs/mappings/
+## Useful links: <br />
+Tag info: https://en.wikipedia.org/wiki/ID3, https://picard.musicbrainz.org/docs/mappings/ <br />
+Tag mappings: https://picard.musicbrainz.org/docs/mappings/ <br />
