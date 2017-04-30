@@ -2,6 +2,10 @@ import java.awt.BorderLayout;
 import java.awt.EventQueue;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.File;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -16,6 +20,11 @@ import javax.swing.JTextField;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
 
+import javafx.application.Platform;
+import javafx.embed.swing.JFXPanel;
+import javafx.stage.DirectoryChooser;
+import javafx.stage.FileChooser;
+
 public class UI extends JFrame {
     /**
      * Serial user ID
@@ -26,6 +35,7 @@ public class UI extends JFrame {
     private JTextArea statusText;
     private MusicSyncer musicSyncer;
     private Thread musicSyncerThread;
+    DirectoryChooser dirChooser;
 
     /**
      * Launch the application.
@@ -72,6 +82,7 @@ public class UI extends JFrame {
         JPanel browsePanel = new JPanel();
         topPanel.add(browsePanel);
         browsePanel.setLayout(new BoxLayout(browsePanel, BoxLayout.Y_AXIS));
+        /*
         // "Prettify" the FileChooser dialog.
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -79,22 +90,22 @@ public class UI extends JFrame {
                 | IllegalAccessException
                 | UnsupportedLookAndFeelException e1) {
             System.err.println("FATAL: Could not open the browse dialog. Please input the destination of source folder manually.");
-        }
+        } */
+        new JFXPanel(); // Initialize JavaFX thread when using its FileChooser (ideally called once)
+        dirChooser = new DirectoryChooser();
         JButton srcBrowseButton = new JButton("Browse...");
         srcBrowseButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                /* TODO JavaFX has a much better FileChooser, which needs to be integrated in this Swing application...
-                 * Sources: http://stackoverflow.com/questions/28920758/javafx-filechooser-in-swing
-                 * Sources: https://www.reddit.com/r/javahelp/comments/2lypn4/trying_to_use_javafxstagefilechooser_in_a_swing/
-                FileChooser openDialog = new FileChooser();
-                openDialog.showOpenDialog(null);
-                */
-                final JFileChooser openDialog = new JFileChooser();
-                openDialog.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-                final String srcFolderString = browseDialog(openDialog);
-                // If the user did not choose a folder, then keep the current folder.
-                if (!srcFolderString.equals("")) {
-                    txtSrcDir.setText(srcFolderString);
+                String srcFolderString = "";
+                try {
+                    srcFolderString = browseDialog();
+                } catch (InterruptedException | ExecutionException ex) {
+                    System.err.println("FATAL: " + ex.getMessage());
+                } finally {
+                    // If the user did not choose a folder, then keep the current folder.
+                    if (!srcFolderString.equals("")) {
+                        txtSrcDir.setText(srcFolderString);
+                    }
                 }
             }
         });
@@ -103,12 +114,16 @@ public class UI extends JFrame {
         JButton dstBrowseButton = new JButton("Browse...");
         dstBrowseButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                final JFileChooser openDialog = new JFileChooser();
-                openDialog.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-                final String dstFolderString = browseDialog(openDialog);
-                // If the user did not choose a folder, then keep the current folder.
-                if (!dstFolderString.equals("")) {
-                    txtDstDir.setText(dstFolderString);
+                String dstFolderString = "";
+                try {
+                    dstFolderString = browseDialog();
+                } catch (InterruptedException | ExecutionException ex) {
+                    System.err.println("FATAL: " + ex.getMessage());
+                } finally {
+                    // If the user did not choose a folder, then keep the current folder.
+                    if (!dstFolderString.equals("")) {
+                        txtSrcDir.setText(dstFolderString);
+                    }
                 }
             }
         });
@@ -194,8 +209,11 @@ public class UI extends JFrame {
      * Opens up a FileChooser dialog where you can open a file.
      * @param jfc
      * @return
+     * @throws ExecutionException 
+     * @throws InterruptedException 
      */
-    private String browseDialog(JFileChooser jfc) {
+    private String browseDialog() throws InterruptedException, ExecutionException {
+        /* The old way with JFileChooser
         final String returnString;
         final int returnVal = jfc.showOpenDialog(UI.this);
         if (returnVal == JFileChooser.APPROVE_OPTION) {
@@ -205,6 +223,27 @@ public class UI extends JFrame {
         }
         
         return returnString;
+        */
+        
+        /*
+         * TODO Javadoc for this awesome code is needed. Source: http://stackoverflow.com/a/13804542
+         */
+        final FutureTask<String> queryFolder = new FutureTask<String>(new Callable<String>() {           
+            @Override
+            public String call() {
+                // Show open directory dialog
+                final File folder = dirChooser.showDialog(null);
+                final String folderString;
+                if (folder != null) {
+                    dirChooser.setInitialDirectory(folder);
+                    folderString = folder.getAbsolutePath();
+                } else {
+                    folderString = "";
+                }
+                return folderString;
+            }
+        });
+        Platform.runLater(queryFolder);
+        return queryFolder.get();
     }
-
 }
