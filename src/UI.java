@@ -118,10 +118,10 @@ public class UI extends JFrame {
         getContentPane().add(westPanel, BorderLayout.WEST);
         westPanel.setLayout(new BoxLayout(westPanel, BoxLayout.Y_AXIS));
         
-        JCheckBox checkBox1 = new JCheckBox("Option 1");
-        westPanel.add(checkBox1);
-        JCheckBox checkBox2 = new JCheckBox("Option 2");
-        westPanel.add(checkBox2);
+        JCheckBox addNewMusicCheckBox = new JCheckBox("Add new music");
+        westPanel.add(addNewMusicCheckBox);
+        JCheckBox deleteOrphanedCheckBox = new JCheckBox("Delete orphaned music");
+        westPanel.add(deleteOrphanedCheckBox);
         JCheckBox checkBox3 = new JCheckBox("Option 3");
         westPanel.add(checkBox3);
         
@@ -161,16 +161,20 @@ public class UI extends JFrame {
                     Runnable musicSyncerRunnable = new Runnable() {
                         @Override
                         public void run() {
-                            musicSyncer = new MusicSyncer(txtSrcDir.getText(),
-                                    txtDstDir.getText());
+                            musicSyncer = new MusicSyncer(txtSrcDir.getText(), txtDstDir.getText());
+                            // Include the state of the checkboxes.
+                            musicSyncer.setAddNewMusicOption(addNewMusicCheckBox.isSelected());
+                            musicSyncer.setDeleteOrphanedMusic(deleteOrphanedCheckBox.isSelected());
+                            musicSyncer.setRENAMEME(checkBox3.isSelected());
                             try {
                                 musicSyncer.initiate();
                             } catch (InterruptedException e) {
+                                statusText.append("Execution was stopped.\n");
+                            } finally {
                                 // Restore everything to its default value.
                                 startButton.setText("Start!");
                                 srcBrowseButton.setEnabled(true);
                                 dstBrowseButton.setEnabled(true);
-                                statusText.append("Execution was stopped.\n");
                             }
                             // When done, change the text back
                         }

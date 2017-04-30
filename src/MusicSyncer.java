@@ -21,22 +21,20 @@ public class MusicSyncer {
     private long TEMP_LAST_MODIFIED = Long.MIN_VALUE; // TODO Get this from the previous list, if any.
     private final String dstFolder;
     private final String srcFolder;
+    private boolean optionAddNewMusic;
+    private boolean optionDeleteOrphanedMusic;
+    private boolean optionRENAMEME;
     
     public MusicSyncer(String srcFolder, String dstFolder) {
         this.srcFolder = srcFolder;
         this.dstFolder = dstFolder;
+        // Options are false by default.
+        optionAddNewMusic = false;
+        optionDeleteOrphanedMusic = false;
+        optionRENAMEME = false;
     }
     
     public boolean initiate() throws InterruptedException {
-        for (int i = 0; i < Integer.MAX_VALUE; i++) {
-            for (int j = 0; j < 10; j++) {
-                if (Thread.currentThread().isInterrupted()) {
-                    throw new InterruptedException();
-                }
-                System.out.println("Running for the " + j + "th time");
-                
-            }
-        }
         boolean didAllGoWell = true;
         File fileFolderSrc = new File(srcFolder.replace('\\', '/'));
         File fileFolderDst = new File(dstFolder.replace("\\", "/"));
@@ -54,6 +52,18 @@ public class MusicSyncer {
         }
         return didAllGoWell;
     }
+    
+    public void setAddNewMusicOption(boolean option) {
+        optionAddNewMusic = option;
+    }
+    
+    public void setDeleteOrphanedMusic(boolean option) {
+        optionDeleteOrphanedMusic = option;
+    }
+    
+    public void setRENAMEME(boolean option) {
+        optionRENAMEME = option;
+    }
 
     private boolean listFilesOfFolder(final File folderSrc, final File folderDst) {
         // Note that we want to locally scope variables as much as possible:
@@ -68,7 +78,7 @@ public class MusicSyncer {
             if (fileEntry.isDirectory()) {
                 // If a folder was found, search it.
                 // TODO Will not be tested with the current directory
-                System.out.println("Recursing through folder; THIS SHOULD NOT HAPPEN");
+                System.out.println("Recursing through folder; THIS SHOULD NOT HAPPEN (FOR NOW)");
                 listFilesOfFolder(fileEntry, folderDst);
             } else {
                 // Get file name and extension, if any.
@@ -93,23 +103,10 @@ public class MusicSyncer {
                     // "These are not the files you are looking for."
                     continue;
                 }
-                // Copy music to dst if it does not exist already.
-                // TODO Filter for searching for a specific music file. This runs n^2 times.......
-                final FilenameFilter musicFilter = new FilenameFilter() {
-                    @Override
-                    public boolean accept(File dir, String name) {
-                        System.out.println("Comparing " + name + " to " + strFile);
-                        return name.equals(strFile);
-                    }
-                };
-                if (folderDst.list(musicFilter).length <= 0) {
-                    try {
-                        System.out.println("Copying file to dst...");
-                        Path targetPath = folderDst.toPath().resolve(folderSrc.toPath().relativize(fileEntry.toPath()));
-                        Files.copy(fileEntry.toPath(), targetPath);
-                    } catch (IOException e) {
-                        System.err.println("FATAL: Could not copy file to destination.");
-                    }
+                // Copy new music to dst if the option was checked.
+                
+                if (optionAddNewMusic) {
+                    addNewMusicToDst(fileEntry, folderSrc, folderDst);
                 }
             }
         }
@@ -119,6 +116,8 @@ public class MusicSyncer {
             final String strFile = fileEntryDst.getName();
             final int index = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
             final String strExt = strFile.substring(index + 1);
+            boolean isTheMusicOrphaned = true;
+            boolean isItMusic = true;
             
             try {
                 switch (strExt.toUpperCase()) {
@@ -128,6 +127,7 @@ public class MusicSyncer {
                     for (final File fileEntrySrc : listOfSrc) {
                         if (fileEntrySrc.getName().equals(fileEntryDst.getName())) {
                             updateMP3MetaData(fileEntrySrc, fileEntryDst);
+                            isTheMusicOrphaned = false;
                             break;
                         }
                     }
@@ -136,8 +136,16 @@ public class MusicSyncer {
                     // TODO Do something
                     break;
                 default:
-                    System.err.println("The file has an unexpected music extension: " + strExt);
+                    isItMusic = false;
                     break;
+                }
+                // Delete orphaned music in dst if the option was checked.
+                if (optionDeleteOrphanedMusic && isItMusic && isTheMusicOrphaned) {
+                    if (tryToDeleteOrphanedMusicInDst(fileEntryDst)) {
+                        // TODO Inform the user what was deleted!
+                    } else {
+                        // TODO Inform the user if a file could not be deleted and possibly why!
+                    }
                 }
             } catch (InvalidAudioFrameException | CannotReadException
                     | IOException | TagException
@@ -225,9 +233,36 @@ public class MusicSyncer {
         }
     }
     
-    /*
-    private static boolean deleteFileIfItExists(File fileEntry) throws IOException {
-        return fileEntry.delete();
+    private void addNewMusicToDst(final File fileEntry, final File folderSrc,
+            final File folderDst) {
+        // Filter for searching for a specific music file.
+        // TODO This runs n^2 times.......
+        final String strFile = fileEntry.getName();
+        final FilenameFilter musicFilter = new FilenameFilter() {
+            @Override
+            public boolean accept(File dir, String name) {
+                System.out.println(
+                        "Comparing " + name + " to " + strFile);
+                return name.equals(strFile);
+            }
+        };
+        if (folderDst.list(musicFilter).length <= 0) {
+            try {
+                System.out.println("Copying file to dst...");
+                // Convert dst folder's path correctly.
+                Path targetPath = folderDst.toPath()
+                        .resolve(folderSrc.toPath()
+                                .relativize(fileEntry.toPath()));
+                Files.copy(fileEntry.toPath(), targetPath);
+            } catch (IOException e) {
+                System.err.println(
+                        "FATAL: Could not copy file to destination.");
+            }
+        }
     }
-    */
+    
+    private boolean tryToDeleteOrphanedMusicInDst(File fileEntryDst) {
+        // TODO Per the documentation, this can throw an IOException if the operation was unsuccessful. 
+        return fileEntryDst.delete();
+    }
 }
