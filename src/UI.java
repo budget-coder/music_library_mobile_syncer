@@ -101,6 +101,17 @@ public class UI extends JFrame {
         browsePanel.add(srcBrowseButton);
         
         JButton dstBrowseButton = new JButton("Browse...");
+        dstBrowseButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                final JFileChooser openDialog = new JFileChooser();
+                openDialog.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+                final String dstFolderString = browseDialog(openDialog);
+                // If the user did not choose a folder, then keep the current folder.
+                if (!dstFolderString.equals("")) {
+                    txtDstDir.setText(dstFolderString);
+                }
+            }
+        });
         browsePanel.add(dstBrowseButton);
         
         JPanel westPanel = new JPanel();
@@ -175,6 +186,11 @@ public class UI extends JFrame {
         bottomPanel.add(progressBar);
     }
     
+    /** 
+     * Opens up a FileChooser dialog where you can open a file.
+     * @param jfc
+     * @return
+     */
     private String browseDialog(JFileChooser jfc) {
         final String returnString;
         final int returnVal = jfc.showOpenDialog(UI.this);
