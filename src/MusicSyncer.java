@@ -1,12 +1,9 @@
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import org.jaudiotagger.audio.AudioFileIO;
@@ -16,32 +13,52 @@ import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
 import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
 import org.jaudiotagger.audio.mp3.MP3File;
 import org.jaudiotagger.tag.FieldKey;
-import org.jaudiotagger.tag.Tag;
 import org.jaudiotagger.tag.TagException;
 import org.jaudiotagger.tag.id3.AbstractID3v2Tag;
 import org.jaudiotagger.tag.id3.ID3v24Frames;
 
-public class Main {
-    private static long TEMP_LAST_MODIFIED = Long.MIN_VALUE; // TODO Get this from the previous list, if any.
+public class MusicSyncer {    
+    private long TEMP_LAST_MODIFIED = Long.MIN_VALUE; // TODO Get this from the previous list, if any.
+    private final String dstFolder;
+    private final String srcFolder;
     
-    public static void main(String[] args) {
-        System.out.println("Locating the specified folder...");
-        File folderSrc = new File("D:/Users/Aram/MEGA/Music/Music (tags missing or not sorted)/TEST_ORI");
-        File folderDst = new File("D:/Users/Aram/MEGA/Music/Music (tags missing or not sorted)/TEST_MOD");
-        if (!folderSrc.exists()) {
-            System.err.println("ERROR: The specified folder does not exist.");
-            System.exit(-1);
+    public MusicSyncer(String srcFolder, String dstFolder) {
+        this.srcFolder = srcFolder;
+        this.dstFolder = dstFolder;
+    }
+    
+    public boolean initiate() throws InterruptedException {
+        for (int i = 0; i < Integer.MAX_VALUE; i++) {
+            for (int j = 0; j < 10; j++) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedException();
+                }
+                System.out.println("Running for the " + j + "th time");
+                
+            }
         }
-        if (!(folderDst.exists() && folderDst.isDirectory())){
+        boolean didAllGoWell = true;
+        File fileFolderSrc = new File(srcFolder.replace('\\', '/'));
+        File fileFolderDst = new File(dstFolder.replace("\\", "/"));
+        if (!(fileFolderSrc.exists() && fileFolderSrc.isDirectory())) {
+            System.err.println("ERROR: The source folder is not a folder or does not exist.");
+            didAllGoWell = false;
+        }
+        if (!(fileFolderDst.exists() && fileFolderDst.isDirectory())){
             System.err.println("ERROR: The destination folder is not a folder or does not exist.");
-            System.exit(-1);
+            didAllGoWell = false;
         }
-        listFilesOfFolder(folderSrc, folderDst);
+        if (didAllGoWell) {
+            // Reuse the variable
+            didAllGoWell = listFilesOfFolder(fileFolderSrc, fileFolderDst);
+        }
+        return didAllGoWell;
     }
 
-    private static void listFilesOfFolder(final File folderSrc, final File folderDst) {
+    private boolean listFilesOfFolder(final File folderSrc, final File folderDst) {
         // Note that we want to locally scope variables as much as possible:
         // http://stackoverflow.com/questions/8803674/declaring-variables-inside-or-outside-of-a-loop/8878071#8878071
+        boolean didAllGoWell = true;
         List<File> listOfSrc = new ArrayList<>();
         File[] listOfDst = folderDst.listFiles();
         System.out.println("List of src and dst folders completed. Checking for differences...");
@@ -140,6 +157,7 @@ public class Main {
             System.err.println("ERROR: Could not save a list of the music to a .txt file!");
         }
         */
+        return didAllGoWell;
     }
 
     /* TODO Use this method, specifically the part with the lastModified date,
@@ -166,7 +184,7 @@ public class Main {
      * @throws InvalidAudioFrameException
      * @throws CannotWriteException 
      */
-    private static void updateMP3MetaData(File fileSrc, File fileDst)
+    private void updateMP3MetaData(File fileSrc, File fileDst)
             throws CannotReadException, IOException, TagException,
             ReadOnlyFileException, InvalidAudioFrameException, CannotWriteException {
         MP3File mp3FileSrc = (MP3File) AudioFileIO.read(fileSrc);
