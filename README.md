@@ -1,5 +1,5 @@
 # Music Library Mobile Syncer
-A Java program for syncing your local music library to your Android, or similar, device.
+A Java program for syncing your local music library to your Android or other mobile device.
 
 ## Usage: <br />
 To be filled out...
