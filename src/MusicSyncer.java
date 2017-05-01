@@ -1,10 +1,19 @@
+import java.awt.Color;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
+
+import javax.swing.text.SimpleAttributeSet;
+import javax.swing.text.StyleConstants;
 
 import org.jaudiotagger.audio.AudioFileIO;
 import org.jaudiotagger.audio.exceptions.CannotReadException;
@@ -19,11 +28,13 @@ import org.jaudiotagger.tag.id3.ID3v24Frames;
 
 public class MusicSyncer {    
     private long TEMP_LAST_MODIFIED = Long.MIN_VALUE; // TODO Get this from the previous list, if any.
-    private final String dstFolder;
-    private final String srcFolder;
+    private String dstFolder;
+    private String srcFolder;
     private boolean optionAddNewMusic;
     private boolean optionDeleteOrphanedMusic;
     private boolean optionRENAMEME;
+    
+    private SimpleAttributeSet attr;
     
     public MusicSyncer(String srcFolder, String dstFolder) {
         this.srcFolder = srcFolder;
@@ -32,25 +43,23 @@ public class MusicSyncer {
         optionAddNewMusic = false;
         optionDeleteOrphanedMusic = false;
         optionRENAMEME = false;
+        
+        attr = new SimpleAttributeSet();
     }
     
-    public boolean initiate() throws InterruptedException {
-        boolean didAllGoWell = true;
+    public void initiate() throws InterruptedException {
         File fileFolderSrc = new File(srcFolder.replace('\\', '/'));
         File fileFolderDst = new File(dstFolder.replace("\\", "/"));
-        if (!(fileFolderSrc.exists() && fileFolderSrc.isDirectory())) {
-            System.err.println("ERROR: The source folder is not a folder or does not exist.");
-            didAllGoWell = false;
-        }
-        if (!(fileFolderDst.exists() && fileFolderDst.isDirectory())){
-            System.err.println("ERROR: The destination folder is not a folder or does not exist.");
-            didAllGoWell = false;
-        }
-        if (didAllGoWell) {
+        final boolean doesSrcAndDstExist = (fileFolderSrc.exists()
+                && fileFolderSrc.isDirectory())
+                || (fileFolderDst.exists() && fileFolderDst.isDirectory());
+        if (!doesSrcAndDstExist) {
+            StyleConstants.setForeground(attr, Color.RED);
+            UI.writeStatusMessage("ERROR: The source/target folder is not a folder or does not exist.", attr);
+        } else {
             // Reuse the variable
-            didAllGoWell = listFilesOfFolder(fileFolderSrc, fileFolderDst);
+            listFilesOfFolder(fileFolderSrc, fileFolderDst);
         }
-        return didAllGoWell;
     }
     
     public void setAddNewMusicOption(boolean option) {
@@ -71,7 +80,8 @@ public class MusicSyncer {
         boolean didAllGoWell = true;
         List<File> listOfSrc = new ArrayList<>();
         File[] listOfDst = folderDst.listFiles();
-        System.out.println("List of src and dst folders completed. Checking for differences...");
+        StyleConstants.setForeground(attr, Color.BLACK);
+        UI.writeStatusMessage("List of src and dst folders completed. Checking for differences...", attr);
 
         // The file-search algorithm
         for (final File fileEntry : folderSrc.listFiles()) {
@@ -110,7 +120,8 @@ public class MusicSyncer {
                 }
             }
         }
-        System.out.println("Done searching through the src folder. Checking for differences...");
+        StyleConstants.setForeground(attr, Color.BLACK);
+        UI.writeStatusMessage("Done searching through the src folder. Checking for differences...", attr);
         
         for (final File fileEntryDst : listOfDst) {
             final String strFile = fileEntryDst.getName();
@@ -133,7 +144,7 @@ public class MusicSyncer {
                     }
                     break;
                 case "M4A":
-                    // TODO Do something
+                    // TODO Implement M4A tagging
                     break;
                 default:
                     isItMusic = false;
@@ -142,9 +153,11 @@ public class MusicSyncer {
                 // Delete orphaned music in dst if the option was checked.
                 if (optionDeleteOrphanedMusic && isItMusic && isTheMusicOrphaned) {
                     if (tryToDeleteOrphanedMusicInDst(fileEntryDst)) {
-                        // TODO Inform the user what was deleted!
+                        StyleConstants.setForeground(attr, Color.ORANGE);
+                        UI.writeStatusMessage("Deleted " + fileEntryDst.getName(), attr);
                     } else {
-                        // TODO Inform the user if a file could not be deleted and possibly why!
+                        StyleConstants.setForeground(attr, Color.RED);
+                        UI.writeStatusMessage("Could not delete " + fileEntryDst.getName() + ".", attr);
                     }
                 }
             } catch (InvalidAudioFrameException | CannotReadException
@@ -241,8 +254,7 @@ public class MusicSyncer {
         final FilenameFilter musicFilter = new FilenameFilter() {
             @Override
             public boolean accept(File dir, String name) {
-                System.out.println(
-                        "Comparing " + name + " to " + strFile);
+                System.out.println("Comparing " + name + " to " + strFile);
                 return name.equals(strFile);
             }
         };
@@ -254,9 +266,11 @@ public class MusicSyncer {
                         .resolve(folderSrc.toPath()
                                 .relativize(fileEntry.toPath()));
                 Files.copy(fileEntry.toPath(), targetPath);
+                StyleConstants.setForeground(attr, Color.GREEN);
+                UI.writeStatusMessage("Added " + fileEntry.getName() + ".", attr);
             } catch (IOException e) {
-                System.err.println(
-                        "FATAL: Could not copy file to destination.");
+                StyleConstants.setForeground(attr, Color.RED);
+                UI.writeStatusMessage("FATAL: Could not copy " + fileEntry.getName() + " to destination.", attr);
             }
         }
     }

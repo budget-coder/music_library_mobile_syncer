@@ -1,8 +1,13 @@
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.EventQueue;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
@@ -10,20 +15,22 @@ import java.util.concurrent.FutureTask;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import javax.swing.UIManager;
-import javax.swing.UnsupportedLookAndFeelException;
+import javax.swing.JTextPane;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.DefaultStyledDocument;
+import javax.swing.text.MutableAttributeSet;
+import javax.swing.text.SimpleAttributeSet;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.StyledDocument;
 
 import javafx.application.Platform;
 import javafx.embed.swing.JFXPanel;
 import javafx.stage.DirectoryChooser;
-import javafx.stage.FileChooser;
 
 public class UI extends JFrame {
     /**
@@ -32,7 +39,8 @@ public class UI extends JFrame {
     private static final long serialVersionUID = 8597395032893667211L;
     private JTextField txtSrcDir;
     private JTextField txtDstDir;
-    private JTextArea statusText;
+    private static JTextPane statusText;
+    private static StyledDocument statusTextDoc;
     private MusicSyncer musicSyncer;
     private Thread musicSyncerThread;
     DirectoryChooser dirChooser;
@@ -69,16 +77,35 @@ public class UI extends JFrame {
         topPanel.add(dirPanel);
         dirPanel.setLayout(new BoxLayout(dirPanel, BoxLayout.Y_AXIS));
         
+        JScrollPane centerPanel = new JScrollPane();
+        getContentPane().add(centerPanel, BorderLayout.CENTER);
+        // Make a text area with customizable text. The document reflects the changes.
+        statusTextDoc = new DefaultStyledDocument();
+        statusText = new JTextPane(statusTextDoc);
+        statusText.setEditable(false);
+        /* For JTextArea
+        statusText.setLineWrap(true);
+        statusText.setWrapStyleWord(true);
+        */
+        statusText.setText("Status window:\n");
+        centerPanel.setViewportView(statusText);
+        
+        // Load MLMS_Settings.txt if available.
+        String[] arrayOfFolders = tryToLoadPreviousSettings();
         txtSrcDir = new JTextField();
         dirPanel.add(txtSrcDir);
-        txtSrcDir.setText("src dir");
-        txtSrcDir.setColumns(10);
-        
         txtDstDir = new JTextField();
         dirPanel.add(txtDstDir);
-        txtDstDir.setText("target dir");
+        if (!arrayOfFolders[0].equals("")) {
+            txtSrcDir.setText(arrayOfFolders[0]);
+            txtDstDir.setText(arrayOfFolders[1]);
+        } else {
+            txtSrcDir.setText("Input the location of your music library?");
+            txtDstDir.setText("Input the location of where to sync it");
+        }
+        txtSrcDir.setColumns(10);
         txtDstDir.setColumns(10);
-        
+
         JPanel browsePanel = new JPanel();
         topPanel.add(browsePanel);
         browsePanel.setLayout(new BoxLayout(browsePanel, BoxLayout.Y_AXIS));
@@ -134,20 +161,13 @@ public class UI extends JFrame {
         westPanel.setLayout(new BoxLayout(westPanel, BoxLayout.Y_AXIS));
         
         JCheckBox addNewMusicCheckBox = new JCheckBox("Add new music");
+        addNewMusicCheckBox.setForeground(Color.BLUE);
         westPanel.add(addNewMusicCheckBox);
         JCheckBox deleteOrphanedCheckBox = new JCheckBox("Delete orphaned music");
+        deleteOrphanedCheckBox.setForeground(Color.ORANGE);
         westPanel.add(deleteOrphanedCheckBox);
         JCheckBox checkBox3 = new JCheckBox("Option 3");
         westPanel.add(checkBox3);
-        
-        JScrollPane centerPanel = new JScrollPane();
-        getContentPane().add(centerPanel, BorderLayout.CENTER);
-        statusText = new JTextArea();
-        statusText.setEditable(false);
-        statusText.setLineWrap(true);
-        statusText.setWrapStyleWord(true);
-        statusText.setText("Status window:\n");
-        centerPanel.setViewportView(statusText);
         
         JPanel bottomPanel = new JPanel();
         getContentPane().add(bottomPanel, BorderLayout.SOUTH);
@@ -162,6 +182,8 @@ public class UI extends JFrame {
                     // Change the functionality of the button so that it stops
                     // execution when pressed again.
                     startButton.setText("Stop!");
+                    // Clear text
+                    statusText.setText("");
                     // It does not make sense to be able to change the dirs.
                     srcBrowseButton.setEnabled(false);
                     dstBrowseButton.setEnabled(false);
@@ -184,7 +206,9 @@ public class UI extends JFrame {
                             try {
                                 musicSyncer.initiate();
                             } catch (InterruptedException e) {
-                                statusText.append("Execution was stopped.\n");
+                                SimpleAttributeSet attr = new SimpleAttributeSet();
+                                StyleConstants.setForeground(attr, Color.BLUE);
+                                writeStatusMessage("Execution was stopped.", attr);
                             } finally {
                                 // Restore everything to its default value.
                                 startButton.setText("Start!");
@@ -203,6 +227,49 @@ public class UI extends JFrame {
         
         JProgressBar progressBar = new JProgressBar();
         bottomPanel.add(progressBar);
+    }
+    
+    private String[] tryToLoadPreviousSettings() {
+        String srcFolder = "";
+        String dstFolder = "";
+        final String[] returnArray;
+        File settings = new File("MLMS_Settings.txt");
+        if (!settings.exists()) {
+            returnArray = new String[]{"", ""};
+        } else {
+            // Try-with-ressources to ensure that the stream is closed.
+            try (BufferedReader br = new BufferedReader(new FileReader(settings))) {
+                String line = br.readLine();
+                final String srcFolderAttr = "srcFolder=";
+                final String dstFolderAttr = "dstFolder=";
+    
+                while (line != null) {
+                    if (line.startsWith(srcFolderAttr)) {
+                        srcFolder = line.substring(srcFolderAttr.length());
+                    } else if (line.startsWith(dstFolderAttr)) {
+                        dstFolder = line.substring(dstFolderAttr.length());
+                    }
+                    line = br.readLine();
+                }
+            } catch (FileNotFoundException e) {
+                SimpleAttributeSet attr = new SimpleAttributeSet();
+                StyleConstants.setForeground(attr, Color.BLUE);
+                writeStatusMessage("No previous settings were found.", null);
+            } catch (IOException e) {
+                System.err.println("Error when loading settings: " + e.getMessage());
+            }
+            returnArray = new String[]{srcFolder, dstFolder};
+        }
+        return returnArray;
+    }
+
+    public static void writeStatusMessage(String message, MutableAttributeSet attributeSet) {
+        try {
+            statusTextDoc.insertString(statusTextDoc.getLength(), message + "\n", attributeSet);
+        } catch (BadLocationException e) {
+            // This should not happen
+            System.err.println("FATAL: Could not write status message because of an invalid position. The error message: " + e.getMessage());
+        }
     }
     
     /** 
