@@ -8,6 +8,11 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
@@ -44,6 +49,8 @@ public class UI extends JFrame {
     private MusicSyncer musicSyncer;
     private Thread musicSyncerThread;
     DirectoryChooser dirChooser;
+    final String srcFolderAttr;
+    final String dstFolderAttr;
 
     /**
      * Launch the application.
@@ -65,6 +72,9 @@ public class UI extends JFrame {
      * Create the frame.
      */
     public UI() {
+        // For reading the settings correctly
+        srcFolderAttr = "srcFolder=";
+        dstFolderAttr = "dstFolder=";
         setTitle("Your mom");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setBounds(100, 100, 450, 300);
@@ -149,7 +159,7 @@ public class UI extends JFrame {
                 } finally {
                     // If the user did not choose a folder, then keep the current folder.
                     if (!dstFolderString.equals("")) {
-                        txtSrcDir.setText(dstFolderString);
+                        txtDstDir.setText(dstFolderString);
                     }
                 }
             }
@@ -227,6 +237,21 @@ public class UI extends JFrame {
         
         JProgressBar progressBar = new JProgressBar();
         bottomPanel.add(progressBar);
+        
+        // Save settings before exiting the application.
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    final List<String> settings = Arrays
+                            .asList(srcFolderAttr + txtSrcDir.getText() + "\n"
+                                    + dstFolderAttr + txtDstDir.getText());
+                    Files.write(Paths.get("MLMS_Settings.txt"), settings, Charset.forName("UTF-8"));
+                } catch (IOException e) {
+                    System.err.println("ERROR: Could not save a list of the music to a .txt file!");
+                }
+            }
+        }));
     }
     
     private String[] tryToLoadPreviousSettings() {
@@ -240,8 +265,6 @@ public class UI extends JFrame {
             // Try-with-ressources to ensure that the stream is closed.
             try (BufferedReader br = new BufferedReader(new FileReader(settings))) {
                 String line = br.readLine();
-                final String srcFolderAttr = "srcFolder=";
-                final String dstFolderAttr = "dstFolder=";
     
                 while (line != null) {
                     if (line.startsWith(srcFolderAttr)) {
@@ -295,7 +318,7 @@ public class UI extends JFrame {
         /*
          * TODO Javadoc for this awesome code is needed. Source: http://stackoverflow.com/a/13804542
          */
-        final FutureTask<String> queryFolder = new FutureTask<String>(new Callable<String>() {           
+        final FutureTask<String> queryFolder = new FutureTask<String>(new Callable<String>() {
             @Override
             public String call() {
                 // Show open directory dialog
