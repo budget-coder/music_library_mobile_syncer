@@ -68,7 +68,7 @@ public class MusicSyncer {
         optionDeleteOrphanedMusic = option;
     }
     
-    public void setRENAMEME(boolean option) {
+    public void setSearchInSubdirectories(boolean option) {
         optionRENAMEME = option;
     }
 
