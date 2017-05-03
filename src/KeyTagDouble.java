@@ -1,10 +1,8 @@
-import org.jaudiotagger.tag.FieldKey;
-
-public class KeyTagDouble {
-    private FieldKey key;
+public class KeyTagDouble<Key> {
+    private Key key;
     private String tag;
     
-    public KeyTagDouble(FieldKey key, String tag) {
+    public KeyTagDouble(Key key, String tag) {
         this.key = key;
         this.tag = tag;
     }
@@ -13,7 +11,7 @@ public class KeyTagDouble {
         return tag;
     }
     
-    public FieldKey getKey() {
+    public Key getKey() {
         return key;
     }
 }
