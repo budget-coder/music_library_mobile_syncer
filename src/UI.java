@@ -48,9 +48,17 @@ public class UI extends JFrame {
     private static StyledDocument statusTextDoc;
     private MusicSyncer musicSyncer;
     private Thread musicSyncerThread;
-    DirectoryChooser dirChooser;
-    final String srcFolderAttr;
-    final String dstFolderAttr;
+    private DirectoryChooser dirChooser;
+    private final String srcFolderAttr;
+    private final int srcFolderIndex;
+    private final String dstFolderAttr;
+    private final int dstFolderIndex;
+    private final String addNewMusicAttr;
+    private final int addNewMusicIndex;
+    private final String deleteOrphanedAttr;
+    private final int deleteOrphanedIndex;
+    private final String searchInSubdirectoriesAttr;
+    private final int searchInSubdirectoriesIndex;
 
     /**
      * Launch the application.
@@ -62,7 +70,7 @@ public class UI extends JFrame {
                     UI frame = new UI();
                     frame.setVisible(true);
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    System.out.println("FATAL: " + e.getMessage());
                 }
             }
         });
@@ -74,8 +82,16 @@ public class UI extends JFrame {
     public UI() {
         // For reading the settings correctly
         srcFolderAttr = "srcFolder=";
+        srcFolderIndex = 0;
         dstFolderAttr = "dstFolder=";
-        setTitle("Your mom");
+        dstFolderIndex = 1;
+        addNewMusicAttr = "addNewMusic=";
+        addNewMusicIndex = 2;
+        deleteOrphanedAttr= "deleteOrphaned=";
+        deleteOrphanedIndex = 3;
+        searchInSubdirectoriesAttr = "searchInSubdirectories=";
+        searchInSubdirectoriesIndex = 4;
+        setTitle("Music Library Mobile Syncer");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setBounds(100, 100, 450, 300);
         
@@ -101,14 +117,14 @@ public class UI extends JFrame {
         centerPanel.setViewportView(statusText);
         
         // Load MLMS_Settings.txt if available.
-        String[] arrayOfFolders = tryToLoadPreviousSettings();
+        String[] arrayOfSettings = tryToLoadPreviousSettings();
         txtSrcDir = new JTextField();
         dirPanel.add(txtSrcDir);
         txtDstDir = new JTextField();
         dirPanel.add(txtDstDir);
-        if (!arrayOfFolders[0].equals("")) {
-            txtSrcDir.setText(arrayOfFolders[0]);
-            txtDstDir.setText(arrayOfFolders[1]);
+        if (!arrayOfSettings[srcFolderIndex].equals("")) {
+            txtSrcDir.setText(arrayOfSettings[srcFolderIndex]);
+            txtDstDir.setText(arrayOfSettings[dstFolderIndex]);
         } else {
             txtSrcDir.setText("Input the location of your music library?");
             txtDstDir.setText("Input the location of where to sync it");
@@ -171,13 +187,17 @@ public class UI extends JFrame {
         westPanel.setLayout(new BoxLayout(westPanel, BoxLayout.Y_AXIS));
         
         JCheckBox addNewMusicCheckBox = new JCheckBox("Add new music");
+        // Load previous settings and only care about whether "true" was written correctly.
+        addNewMusicCheckBox.setSelected(Boolean.valueOf(arrayOfSettings[addNewMusicIndex]));
         addNewMusicCheckBox.setForeground(Color.BLUE);
         westPanel.add(addNewMusicCheckBox);
         JCheckBox deleteOrphanedCheckBox = new JCheckBox("Delete orphaned music");
+        deleteOrphanedCheckBox.setSelected(Boolean.valueOf(arrayOfSettings[deleteOrphanedIndex]));
         deleteOrphanedCheckBox.setForeground(Color.ORANGE);
         westPanel.add(deleteOrphanedCheckBox);
-        JCheckBox checkBox3 = new JCheckBox("Option 3");
-        westPanel.add(checkBox3);
+        JCheckBox searchInSubdirectoriesCheckBox = new JCheckBox("Search in subdirectories");
+        searchInSubdirectoriesCheckBox.setSelected(Boolean.valueOf(arrayOfSettings[searchInSubdirectoriesIndex]));
+        westPanel.add(searchInSubdirectoriesCheckBox);
         
         JPanel bottomPanel = new JPanel();
         getContentPane().add(bottomPanel, BorderLayout.SOUTH);
@@ -212,7 +232,7 @@ public class UI extends JFrame {
                             // Include the state of the checkboxes.
                             musicSyncer.setAddNewMusicOption(addNewMusicCheckBox.isSelected());
                             musicSyncer.setDeleteOrphanedMusic(deleteOrphanedCheckBox.isSelected());
-                            musicSyncer.setRENAMEME(checkBox3.isSelected());
+                            musicSyncer.setSearchInSubdirectories(searchInSubdirectoriesCheckBox.isSelected());
                             try {
                                 musicSyncer.initiate();
                             } catch (InterruptedException e) {
@@ -237,15 +257,19 @@ public class UI extends JFrame {
         
         JProgressBar progressBar = new JProgressBar();
         bottomPanel.add(progressBar);
-        
         // Save settings before exiting the application.
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    final List<String> settings = Arrays
-                            .asList(srcFolderAttr + txtSrcDir.getText() + "\n"
-                                    + dstFolderAttr + txtDstDir.getText());
+                    final List<String> settings = Arrays.asList(srcFolderAttr
+                            + txtSrcDir.getText() + "\n" + dstFolderAttr
+                            + txtDstDir.getText() + "\n" + addNewMusicAttr
+                            + addNewMusicCheckBox.isSelected() + "\n"
+                            + deleteOrphanedAttr
+                            + deleteOrphanedCheckBox.isSelected() + "\n"
+                            + searchInSubdirectoriesAttr
+                            + searchInSubdirectoriesCheckBox.isSelected());
                     Files.write(Paths.get("MLMS_Settings.txt"), settings, Charset.forName("UTF-8"));
                 } catch (IOException e) {
                     System.err.println("ERROR: Could not save a list of the music to a .txt file!");
@@ -257,6 +281,9 @@ public class UI extends JFrame {
     private String[] tryToLoadPreviousSettings() {
         String srcFolder = "";
         String dstFolder = "";
+        String addNewMusic = "";
+        String deleteOrphaned = "";
+        String searchInSubdirectories = "";
         final String[] returnArray;
         File settings = new File("MLMS_Settings.txt");
         if (!settings.exists()) {
@@ -271,6 +298,12 @@ public class UI extends JFrame {
                         srcFolder = line.substring(srcFolderAttr.length());
                     } else if (line.startsWith(dstFolderAttr)) {
                         dstFolder = line.substring(dstFolderAttr.length());
+                    } else if (line.startsWith(addNewMusicAttr)) {
+                        addNewMusic = line.substring(addNewMusicAttr.length());
+                    } else if (line.startsWith(deleteOrphanedAttr)) {
+                        deleteOrphaned = line.substring(deleteOrphanedAttr.length());
+                    } else if (line.startsWith(searchInSubdirectoriesAttr)) {
+                        searchInSubdirectories = line.substring(searchInSubdirectoriesAttr.length());
                     }
                     line = br.readLine();
                 }
@@ -281,7 +314,7 @@ public class UI extends JFrame {
             } catch (IOException e) {
                 System.err.println("Error when loading settings: " + e.getMessage());
             }
-            returnArray = new String[]{srcFolder, dstFolder};
+            returnArray = new String[]{srcFolder, dstFolder, addNewMusic, deleteOrphaned, searchInSubdirectories};
         }
         return returnArray;
     }
@@ -291,7 +324,9 @@ public class UI extends JFrame {
             statusTextDoc.insertString(statusTextDoc.getLength(), message + "\n", attributeSet);
         } catch (BadLocationException e) {
             // This should not happen
-            System.err.println("FATAL: Could not write status message because of an invalid position. The error message: " + e.getMessage());
+            System.err.println(
+                    "FATAL: Could not write status message because of an invalid position. The error message: "
+                            + e.getMessage());
         }
     }
     
