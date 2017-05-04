@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import javax.swing.text.SimpleAttributeSet;
@@ -21,7 +23,6 @@ import org.jaudiotagger.tag.FieldKey;
 import org.jaudiotagger.tag.TagException;
 import org.jaudiotagger.tag.id3.AbstractID3v2Tag;
 import org.jaudiotagger.tag.id3.ID3v24Frames;
-import org.jaudiotagger.tag.mp4.Mp4FieldKey;
 import org.jaudiotagger.tag.mp4.Mp4Tag;
 
 public class MusicSyncer {    
@@ -30,9 +31,19 @@ public class MusicSyncer {
     private String srcFolder;
     private boolean optionAddNewMusic;
     private boolean optionDeleteOrphanedMusic;
-    private boolean optionRENAMEME;
-    
+    private boolean optionSearchInSubdirectories;
     private SimpleAttributeSet attr;
+    /**
+     * We want to make a list of keys to avoid duplication and reduce the
+     * likelihood of the programmer forgetting to check for a key. This list
+     * will NOT be able to be modified after creation as this will add bugs.
+     */
+    private final List<String> listOfMP3Keys;
+    /**
+     * {@link #listOfMP3Keys}
+     */
+    private final List<FieldKey> listOfMP4Keys;
+    
     
     public MusicSyncer(String srcFolder, String dstFolder) {
         this.srcFolder = srcFolder;
@@ -40,9 +51,19 @@ public class MusicSyncer {
         // Options are false by default.
         optionAddNewMusic = false;
         optionDeleteOrphanedMusic = false;
-        optionRENAMEME = false;
+        optionSearchInSubdirectories = false;
         
         attr = new SimpleAttributeSet();
+        listOfMP3Keys = Collections.unmodifiableList(Arrays.asList(
+                ID3v24Frames.FRAME_ID_TITLE, ID3v24Frames.FRAME_ID_ARTIST,
+                ID3v24Frames.FRAME_ID_ACCOMPANIMENT,
+                ID3v24Frames.FRAME_ID_ALBUM, ID3v24Frames.FRAME_ID_YEAR,
+                ID3v24Frames.FRAME_ID_TRACK, ID3v24Frames.FRAME_ID_SET,
+                ID3v24Frames.FRAME_ID_GENRE, ID3v24Frames.FRAME_ID_COMPOSER));
+        listOfMP4Keys = Collections.unmodifiableList(Arrays.asList(
+                FieldKey.TITLE, FieldKey.ARTIST, FieldKey.ALBUM_ARTIST,
+                FieldKey.ALBUM, FieldKey.YEAR, FieldKey.TRACK, FieldKey.DISC_NO,
+                FieldKey.GENRE, FieldKey.COMPOSER));
     }
     
     public void initiate() throws InterruptedException {
@@ -69,7 +90,7 @@ public class MusicSyncer {
     }
     
     public void setSearchInSubdirectories(boolean option) {
-        optionRENAMEME = option;
+        optionSearchInSubdirectories = option;
     }
 
     private boolean listFilesOfFolder(final File folderSrc, final File folderDst) {
@@ -83,8 +104,8 @@ public class MusicSyncer {
 
         // The file-search algorithm
         for (final File fileEntry : folderSrc.listFiles()) {
-            if (fileEntry.isDirectory()) {
-                // If a folder was found, search it.
+            if (optionSearchInSubdirectories && fileEntry.isDirectory()) {
+                // If a folder was found, and the user wants it, then search it.
                 // TODO Will not be tested with the current directory
                 System.out.println("Recursing through folder; THIS SHOULD NOT HAPPEN (FOR NOW)");
                 listFilesOfFolder(fileEntry, folderDst);
@@ -143,7 +164,6 @@ public class MusicSyncer {
                     break;
                 case "M4A":
                     // M4A are structurally the same as MP4 files.
-                    System.out.println("Found m4a file");
                     for (final File fileEntrySrc : listOfSrc) {
                         if (fileEntrySrc.getName().equals(fileEntryDst.getName())) {
                             updateM4AMetaData(fileEntrySrc, fileEntryDst);
@@ -214,40 +234,72 @@ public class MusicSyncer {
     private void updateMP3MetaData(File fileSrc, File fileDst)
             throws CannotReadException, IOException, TagException,
             ReadOnlyFileException, InvalidAudioFrameException, CannotWriteException {
+        /*
+        // Here we need to make a wrapper class because we need the tag field
+        // when updating music.
+        List<KeyTagDouble<String>> listOfTagsSrc = new ArrayList<>();
+        List<KeyTagDouble<FieldKey>> listOfTagsDst = new ArrayList<>();
+        // Read metadata from the files.
         MP3File mp3FileSrc = (MP3File) AudioFileIO.read(fileSrc);
-        AbstractID3v2Tag v2TagSrc = mp3FileSrc.getID3v2Tag();
+        AbstractID3v2Tag v2TagSrc = mp3FileSrc.getID3v2TagAsv24();
+        MP3File mp3FileDst = (MP3File) AudioFileIO.read(fileDst);
+        AbstractID3v2Tag v2TagDst = mp3FileDst.getID3v2TagAsv24();
+        // Get each relevant tag from src and dst version of the file and save
+        // them in lists for later comparisons.
+        for (int i = 0; i < listOfMP3Keys.size(); i++) {
+            String key = listOfMP3Keys.get(i);
+            FieldKey fieldKey = listOfMP4Keys.get(i); // TODO This is dangerous as it assumes that both lists are in the same order.
+            listOfTagsSrc.add(new KeyTagDouble<String>(key, v2TagSrc.getFirst(key)));
+            listOfTagsDst.add(new KeyTagDouble<FieldKey>(fieldKey, v2TagDst.getFirst(key)));
+        }
+        // Now for the comparisons.
+        KeyTagDouble<FieldKey> keyTagFile;
+        for (int i = 0; i < listOfTagsSrc.size(); i++) {
+            keyTagFile = listOfTagsDst.get(i);
+            if (!listOfTagsSrc.get(i).getTag().equals(keyTagFile.getTag())) {
+                System.out.println("Updating mp3 metadata for " + keyTagFile.getKey() + " and setting it to " + listOfTagsSrc.get(i).getTag());
+                // Update metadata of the target music file.
+                v2TagDst.setField(keyTagFile.getKey(), listOfTagsSrc.get(i).getTag());
+                mp3FileDst.commit();
+            }
+        }
+        */
+        
+        MP3File mp3FileSrc = (MP3File) AudioFileIO.read(fileSrc);
+        AbstractID3v2Tag v2TagSrc = mp3FileSrc.getID3v2TagAsv24();
         List<String> listOfTagsSrc = new ArrayList<>();
         // NOTE: Both lists must contain each tag in the same order!
         listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_TITLE));
         listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_ARTIST));
         listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_ACCOMPANIMENT));
         listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_ALBUM));
-        listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_YEAR));
+        listOfTagsSrc.add(v2TagSrc.getFirst("TDRC"));
         listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_TRACK));
         listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_SET));
         listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_GENRE));
         listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_COMPOSER));
         
         MP3File mp3FileDst = (MP3File) AudioFileIO.read(fileDst);
-        AbstractID3v2Tag v2TagDst = mp3FileDst.getID3v2Tag();
+        AbstractID3v2Tag v2TagDst = mp3FileDst.getID3v2TagAsv24();
         // Here we need to make a wrapper class because we need the tag field
         // when updating music.
-        List<KeyTagDouble> listOfTagsDst = new ArrayList<>();
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.TITLE, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_TITLE)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.ARTIST, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_ARTIST)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.ALBUM_ARTIST, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_ACCOMPANIMENT)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.ALBUM, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_ALBUM)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.YEAR, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_YEAR)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.TRACK, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_TRACK)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.DISC_NO, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_SET)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.GENRE, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_GENRE)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.COMPOSER, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_COMPOSER)));
+        List<KeyTagDouble<FieldKey>> listOfTagsDst = new ArrayList<>();
+        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.TITLE, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_TITLE)));
+        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.ARTIST, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_ARTIST)));
+        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.ALBUM_ARTIST, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_ACCOMPANIMENT)));
+        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.ALBUM, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_ALBUM)));
+        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.YEAR, v2TagDst.getFirst("TDRC")));
+        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.TRACK, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_TRACK)));
+        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.DISC_NO, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_SET)));
+        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.GENRE, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_GENRE)));
+        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.COMPOSER, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_COMPOSER)));
         // Now for the comparisons.
-        KeyTagDouble keyTagFile;
+        KeyTagDouble<FieldKey> keyTagFile;
         for (int i = 0; i < listOfTagsSrc.size(); i++) {
             keyTagFile = listOfTagsDst.get(i);
             if (!listOfTagsSrc.get(i).equals(keyTagFile.getTag())) {
                 // Update metadata of the target music file.
+                System.out.println("Updating mp3 " + keyTagFile.getTag());
                 v2TagDst.setField(keyTagFile.getKey(), listOfTagsSrc.get(i));
                 mp3FileDst.commit();
             }
@@ -258,47 +310,26 @@ public class MusicSyncer {
     private void updateM4AMetaData(File fileSrc, File fileDst)
             throws CannotReadException, IOException, TagException,
             ReadOnlyFileException, InvalidAudioFrameException, CannotWriteException {
-        System.out.println("Updating M4A file");
+        List<KeyTagDouble<FieldKey>> listOfTagsSrc = new ArrayList<>();
+        List<KeyTagDouble<FieldKey>> listOfTagsDst = new ArrayList<>();
+        // Read metadata from the files.
         Mp4Tag mp4FileSrc = (Mp4Tag) AudioFileIO.read(fileSrc).getTag();
-        List<String> listOfTagsSrc = new ArrayList<>();
-        // TODO How can you do this better? This is error prone because both
-        // lists have to have the tags in the same order, and no tags must be
-        // forgotten...
-        listOfTagsSrc.add(mp4FileSrc.getFirst(Mp4FieldKey.TITLE));
-        listOfTagsSrc.add(mp4FileSrc.getFirst(Mp4FieldKey.ARTIST));
-        listOfTagsSrc.add(mp4FileSrc.getFirst(Mp4FieldKey.ALBUM_ARTIST));
-        System.out.println(mp4FileSrc.getFirst(Mp4FieldKey.ALBUM_ARTIST));
-        listOfTagsSrc.add(mp4FileSrc.getFirst(Mp4FieldKey.ALBUM));
-        listOfTagsSrc.add(mp4FileSrc.getFirst(Mp4FieldKey.MM_ORIGINAL_YEAR));
-        System.out.println(mp4FileSrc.getFirst(Mp4FieldKey.MM_ORIGINAL_YEAR));
-        listOfTagsSrc.add(mp4FileSrc.getFirst(Mp4FieldKey.TRACK));
-        System.out.println(mp4FileSrc.getFirst(Mp4FieldKey.TRACK));
-        listOfTagsSrc.add(mp4FileSrc.getFirst(Mp4FieldKey.DISCNUMBER));
-        System.out.println(mp4FileSrc.getFirst(Mp4FieldKey.DISCNUMBER));
-        listOfTagsSrc.add(mp4FileSrc.getFirst(Mp4FieldKey.GENRE));
-        listOfTagsSrc.add(mp4FileSrc.getFirst(Mp4FieldKey.COMPOSER));
-        
         AudioFile mp4AudioFileDst = AudioFileIO.read(fileDst);
         Mp4Tag mp4FileDst = (Mp4Tag) mp4AudioFileDst.getTag();
-        // Like in the method "updateMP3MetaData(File, File)", we need a wrapper
-        // class when updating music.
-        List<KeyTagDouble> listOfTagsDst = new ArrayList<>();
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.TITLE, mp4FileDst.getFirst(Mp4FieldKey.TITLE)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.ARTIST, mp4FileDst.getFirst(Mp4FieldKey.ARTIST)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.ALBUM_ARTIST, mp4FileDst.getFirst(Mp4FieldKey.ALBUM_ARTIST)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.ALBUM, mp4FileDst.getFirst(Mp4FieldKey.ALBUM)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.YEAR, mp4FileDst.getFirst(Mp4FieldKey.MM_ORIGINAL_YEAR)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.TRACK, mp4FileDst.getFirst(Mp4FieldKey.TRACK)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.DISC_NO, mp4FileDst.getFirst(Mp4FieldKey.DISCNUMBER)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.GENRE, mp4FileDst.getFirst(Mp4FieldKey.GENRE)));
-        listOfTagsDst.add(new KeyTagDouble(FieldKey.COMPOSER, mp4FileDst.getFirst(Mp4FieldKey.COMPOSER)));
+        
+        // Get each relevant tag from src and dst version of the file and save
+        // them in lists for later comparisons.
+        for (FieldKey key : listOfMP4Keys) {
+            listOfTagsSrc.add(new KeyTagDouble<FieldKey>(key, mp4FileSrc.getFirst(key)));
+            listOfTagsDst.add(new KeyTagDouble<FieldKey>(key, mp4FileDst.getFirst(key)));
+        }
         // Now for the comparisons.
-        KeyTagDouble keyTagFile;
+        KeyTagDouble<FieldKey> keyTagFile;
         for (int i = 0; i < listOfTagsSrc.size(); i++) {
             keyTagFile = listOfTagsDst.get(i);
-            if (!listOfTagsSrc.get(i).equals(keyTagFile.getTag())) {
+            if (!listOfTagsSrc.get(i).getTag().equals(keyTagFile.getTag())) {
                 // Update metadata of the target music file.
-                mp4FileDst.setField(keyTagFile.getKey(), listOfTagsSrc.get(i));
+                mp4FileDst.setField(keyTagFile.getKey(), listOfTagsSrc.get(i).getTag());
                 mp4AudioFileDst.commit();
             }
         }

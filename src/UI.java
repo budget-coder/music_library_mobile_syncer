@@ -330,12 +330,13 @@ public class UI extends JFrame {
         }
     }
     
-    /** 
+    /**
      * Opens up a FileChooser dialog where you can open a file.
-     * @param jfc
-     * @return
-     * @throws ExecutionException 
-     * @throws InterruptedException 
+     * 
+     * @return the path to the folder chosen by the user, if any. Otherwise, it
+     *         will be the empty string.
+     * @throws InterruptedException
+     * @throws ExecutionException
      */
     private String browseDialog() throws InterruptedException, ExecutionException {
         /* The old way with JFileChooser
@@ -369,6 +370,7 @@ public class UI extends JFrame {
             }
         });
         Platform.runLater(queryFolder);
+        // The following method is synchronous; it will block until queryFolder is done.
         return queryFolder.get();
     }
 }
