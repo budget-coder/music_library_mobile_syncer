@@ -5,8 +5,10 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FilenameFilter;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -108,9 +110,10 @@ public class MusicSyncer {
         // Note that we want to locally scope variables as much as possible:
         // http://stackoverflow.com/questions/8803674/declaring-variables-inside-or-outside-of-a-loop/8878071#8878071
         boolean didAllGoWell = true;
-        List<File> sortedListOfSrc = new ArrayList<>();
         File[] listOfSrc = folderSrc.listFiles();
         File[] listOfDst = folderDst.listFiles();
+        List<File> sortedListOfSrc = new ArrayList<>();
+        String currentSession = "";
         List<DoubleWrapper<String, Long>> lastSession = tryToLoadPreviousSession();
         StyleConstants.setForeground(attr, Color.BLACK);
         UI.writeStatusMessage("List of src and dst folders completed. Checking for differences...", attr);
@@ -120,6 +123,7 @@ public class MusicSyncer {
         int lastSessionIndex = 0;
         for (int i = 0; i < listOfSrc.length; i++) {
             final File fileEntry = listOfSrc[i];
+            boolean isCurrentSessionUpdated = false;
 
             if (optionSearchInSubdirectories && fileEntry.isDirectory()) {
                 // If a folder was found, and the user wants it, then search it.
@@ -132,71 +136,58 @@ public class MusicSyncer {
                 final int fileExtIndex = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
                 final String strExt = strFile.substring(fileExtIndex + 1);
                 final long fileLastMod = fileEntry.lastModified();
-                // Careful of IndexOutOfBoundExceptions.
+                // Try to locate the file in the previous session instead of checking all the metadata.
                 if (lastSession.size() >= lastSessionIndex) {
                     final boolean isSameFile = lastSession.get(lastSessionIndex).getArg1().equals(strFile);
                     final boolean hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileLastMod;
                     // We assume that, for the most part, most music is unchanged from last session.
-                    if (isSameFile) {
+                    if (!isSameFile) {
+                        // Although it is not the same file, we have to make
+                        // absolutely sure that it is not further down the last
+                        // session file.
+                        boolean wasFileLocated = tryToLocateFileInPreviouSession(lastSession, lastSessionIndex, strFile);
+                        if (!wasFileLocated || !hasBeenModified) {
+                            continue;
+                        }
+                    } else {
+                        currentSession += strFile + "\n";
+                        currentSession += fileLastMod + "\n";
                         if (!hasBeenModified) {
                             continue;
                         }
-                        // To make it case-insensitive (and avoid problems with
-                        // Turkish), convert to uppercase.
-                        switch (strExt.toUpperCase()) {
-                        // Exploit the concept of fallthrough.
-                        case "MP3":
-                        case "M4A":
-                            sortedListOfSrc.add(fileEntry);
-                            break;
-                        default:
-                            // "These are not the files you are looking for."
-                            continue;
-                        }
-                        // Copy new music to dst if the option was checked.
-                        // TODO This should be the last operation in the whole program because it adds unnecessary comparisons (at minimum n-checks!).
-                        if (optionAddNewMusic) {
-                            checkAndAddNewMusicToDst(fileEntry, folderSrc, folderDst);
-                        }
-                        continue;
+                        isCurrentSessionUpdated = true;
                     }
-                    // Although it is not the same file, we have to make
-                    // absolutely sure that it is not further down the last
-                    // session file.
-                    int lastSessionIndexCopy = lastSessionIndex;
-                    boolean isOutOfBound = lastSession.size() < lastSessionIndexCopy || lastSessionIndexCopy < 0;
-                    boolean isPreceedingCurrentFile = false;
-                    boolean isFollowingCurrentFile = false;
-                    do {
-                        int currentFileComparedToPreviousVersion = lastSession.get(lastSessionIndex).getArg1().compareTo(strFile); 
-                        if (currentFileComparedToPreviousVersion < 0) {
-                            // We are too low behind in our session list.
-                            if (isFollowingCurrentFile) {
-                                // The previous session did not contain the current file.
-                                break;
-                            }
-                            isPreceedingCurrentFile = true;
-                            lastSessionIndexCopy++;
-                        } else if (currentFileComparedToPreviousVersion > 0) {
-                            // We are too far ahead in our session list.
-                            if (isPreceedingCurrentFile) {
-                                break;
-                            }
-                            isFollowingCurrentFile = true;
-                            lastSessionIndexCopy--;
-                        }
-                        isOutOfBound = lastSession.size() < lastSessionIndexCopy || lastSessionIndexCopy < 0;
-                    } while (!isOutOfBound);
                 }
-                // TODO Ran out of space in last session file. What now?
+                // To make it case-insensitive (and avoid problems with
+                // Turkish), convert to uppercase.
+                switch (strExt.toUpperCase()) {
+                // Exploit the concept of fallthrough.
+                case "MP3":
+                case "M4A":
+                    if (!isCurrentSessionUpdated) {
+                        currentSession += strFile + "\n";
+                        currentSession += fileLastMod + "\n";
+                    }
+                    sortedListOfSrc.add(fileEntry);
+                    lastSessionIndex++;
+                    break;
+                default:
+                    continue; // "These are not the files you are looking for."
+                }
+                // Copy new music to dst if the option was checked.
+                // TODO This should be the last operation in the whole program because it adds unnecessary comparisons (at minimum n-checks!).
+                if (optionAddNewMusic) {
+                    checkAndAddNewMusicToDst(fileEntry, folderSrc, folderDst);
+                }
+                continue;
             }
         }
-        // Determine which files that need syncing.
-        /*
-        if (lastModified <= TEMP_LAST_MODIFIED || index < 0) {
-            returnCode = false;
+        // When all is finished and done, save the list of music to a .txt file (will overwrite existing).
+        try {
+            Files.write(Paths.get("MLMS_LastSession.txt"), Arrays.asList(currentSession), Charset.forName("UTF-8"));
+        } catch (IOException e) {
+            System.err.println("ERROR: Could not save a list of the music to a .txt file!");
         }
-        */
         
         StyleConstants.setForeground(attr, Color.BLACK);
         UI.writeStatusMessage("Done searching through the src folder. Checking for differences...", attr);
@@ -261,18 +252,44 @@ public class MusicSyncer {
             }
         }
         
-        // TODO If everything worked out, i.e. ask user, save a .txt file
-        // Path pathTolibraryTxt = Paths.get(".").toAbsolutePath().normalize(); // Get dir of application.
-        
-        /*
-        // When all is finished and done, save the list of music to a .txt file (will overwrite existing).
-        try {
-            Files.write(Paths.get("MLMS.txt"), listStrings, Charset.forName("UTF-8"));
-        } catch (IOException e) {
-            System.err.println("ERROR: Could not save a list of the music to a .txt file!");
-        }
-        */
         return didAllGoWell;
+    }
+
+    private boolean tryToLocateFileInPreviouSession(
+            List<DoubleWrapper<String, Long>> lastSession, int lastSessionIndex,
+            String strFile) {
+        // TODO Ya better add a description of this fuckery. :D
+        boolean isOutOfBound = lastSession.size() < lastSessionIndex || lastSessionIndex < 0;
+        boolean isPreceedingCurrentFile = false;
+        boolean isFollowingCurrentFile = false;
+        boolean wasFileLocated = false;
+        do {
+            int currentFileComparedToPreviousVersion = lastSession.get(lastSessionIndex).getArg1().compareTo(strFile); 
+            if (currentFileComparedToPreviousVersion < 0) {
+                // We are too low behind in our session list.
+                if (isFollowingCurrentFile) {
+                    // The previous session did not contain the
+                    // current file; in the previous iteration, the
+                    // index was decremented.
+                    break;
+                }
+                isPreceedingCurrentFile = true;
+                lastSessionIndex++;
+            } else if (currentFileComparedToPreviousVersion > 0) {
+                // We are too far ahead in our session list.
+                if (isPreceedingCurrentFile) {
+                    // Same conclusion for the opposite reason; previously, the index was incremented. 
+                    break;
+                }
+                isFollowingCurrentFile = true;
+                lastSessionIndex--;
+            } else {
+                // Hoozah! We found the file.
+                wasFileLocated = true;
+            }
+            isOutOfBound = lastSession.size() < lastSessionIndex || lastSessionIndex < 0;
+        } while (!isOutOfBound && !wasFileLocated);
+        return wasFileLocated;
     }
 
     /**
