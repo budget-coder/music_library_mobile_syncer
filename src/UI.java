@@ -206,6 +206,7 @@ public class UI extends JFrame {
         startButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent arg0) {
                 // Stop execution if the button was pressed while it was running.
+                // TODO Actually add places where interrupts in MusicSyncer.
                 if (startButton.getText().equals("Stop!")) {
                     musicSyncerThread.interrupt();
                 } else {
