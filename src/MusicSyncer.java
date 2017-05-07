@@ -163,21 +163,28 @@ public class MusicSyncer {
                     // Only start comparing metadata if both dir have the file.
                     // TODO This is ugly and slow as fuck
                     for (final File fileEntrySrc : listOfSrc) {
-                        if (fileEntrySrc.getName().equals(fileEntryDst.getName())) {
-                            updateMP3MetaData(fileEntrySrc, fileEntryDst);
-                            isTheMusicOrphaned = false;
-                            break;
+                        if (!(fileEntrySrc.getName().equals(fileEntryDst.getName()))) { // Do nothing because file was not found.
+                            continue;
                         }
+                        isTheMusicOrphaned = false;
+                        if (fileEntrySrc.lastModified() >= fileEntryDst.lastModified()) {
+                            // Only update metadata if the user updated the src file.
+                            updateMP3MetaData(fileEntrySrc, fileEntryDst);
+                        }
+                        break;
                     }
                     break;
                 case "M4A":
                     // M4A are structurally the same as MP4 files.
                     for (final File fileEntrySrc : listOfSrc) {
-                        if (fileEntrySrc.getName().equals(fileEntryDst.getName())) {
+                        if (!(fileEntrySrc.getName().equals(fileEntryDst.getName()))) { // Do nothing because file was not found.
+                            continue;
+                        }
+                        isTheMusicOrphaned = false;
+                        if (fileEntrySrc.lastModified() >= fileEntryDst.lastModified()) {
                             updateM4AMetaData(fileEntrySrc, fileEntryDst);
-                            isTheMusicOrphaned = false;
-                            break;
-                        } 
+                        }
+                        break;
                     }
                     break;
                 default:
@@ -247,8 +254,7 @@ public class MusicSyncer {
         List<KeyTagDouble<String>> listOfTagsSrc = new ArrayList<>();
         List<KeyTagDouble<FieldKey>> listOfTagsDst = new ArrayList<>();
         // Read metadata from the files.
-        MP3File mp3FileSrc = (MP3File) AudioFileIO.read(fileSrc);
-        AbstractID3v2Tag v2TagSrc = mp3FileSrc.getID3v2Tag();
+        AbstractID3v2Tag v2TagSrc = ((MP3File) AudioFileIO.read(fileSrc)).getID3v2Tag();
         MP3File mp3FileDst = (MP3File) AudioFileIO.read(fileDst);
         AbstractID3v2Tag v2TagDst = mp3FileDst.getID3v2Tag();
         
@@ -264,9 +270,9 @@ public class MusicSyncer {
             listOfTagsSrc.add(new KeyTagDouble<String>(key, v2TagSrc.getFirst(key)));
             //System.out.println("THE KEY IS " + v2TagDst.getValue(fieldKey, 0));
             // TODO For some reason, it fucks up on the genre (for instance, (24) = soundtrack...)
+            // TODO It does not seem to be able to handle YEARs with less than 4 digits well.
             listOfTagsDst.add(new KeyTagDouble<FieldKey>(fieldKey, v2TagDst.getFirst(key)));
         }
-        System.out.println(v2TagDst.getFirst("TCON"));
         // Now for the comparisons.
         KeyTagDouble<FieldKey> keyTagFile;
         for (int i = 0; i < listOfTagsSrc.size(); i++) {
@@ -279,47 +285,6 @@ public class MusicSyncer {
                 mp3FileDst.commit();
             }
         }
-        /*
-        MP3File mp3FileSrc = (MP3File) AudioFileIO.read(fileSrc);
-        AbstractID3v2Tag v2TagSrc = mp3FileSrc.getID3v2TagAsv24();
-        List<String> listOfTagsSrc = new ArrayList<>();
-        // NOTE: Both lists must contain each tag in the same order!
-        listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_TITLE));
-        listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_ARTIST));
-        listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_ACCOMPANIMENT));
-        listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_ALBUM));
-        listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_YEAR));
-        listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_TRACK));
-        listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_SET));
-        listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_GENRE));
-        listOfTagsSrc.add(v2TagSrc.getFirst(ID3v24Frames.FRAME_ID_COMPOSER));
-        
-        MP3File mp3FileDst = (MP3File) AudioFileIO.read(fileDst);
-        AbstractID3v2Tag v2TagDst = mp3FileDst.getID3v2TagAsv24();
-        // Here we need to make a wrapper class because we need the tag field
-        // when updating music.
-        List<KeyTagDouble<FieldKey>> listOfTagsDst = new ArrayList<>();
-        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.TITLE, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_TITLE)));
-        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.ARTIST, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_ARTIST)));
-        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.ALBUM_ARTIST, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_ACCOMPANIMENT)));
-        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.ALBUM, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_ALBUM)));
-        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.YEAR, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_YEAR)));
-        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.TRACK, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_TRACK)));
-        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.DISC_NO, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_SET)));
-        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.GENRE, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_GENRE)));
-        listOfTagsDst.add(new KeyTagDouble<FieldKey>(FieldKey.COMPOSER, v2TagDst.getFirst(ID3v24Frames.FRAME_ID_COMPOSER)));
-        // Now for the comparisons.
-        KeyTagDouble<FieldKey> keyTagFile;
-        for (int i = 0; i < listOfTagsSrc.size(); i++) {
-            keyTagFile = listOfTagsDst.get(i);
-            if (!listOfTagsSrc.get(i).equals(keyTagFile.getTag())) {
-                // Update metadata of the target music file.
-                System.out.println("Updating mp3 " + listOfTagsSrc.get(i) + " with field " + keyTagFile.getKey());
-                v2TagDst.addField(keyTagFile.getKey(), listOfTagsSrc.get(i));
-                mp3FileDst.commit();
-            }
-        }
-        */
     }
     
     // TODO This feels a lot like duplicate code but how should it be improved?
@@ -359,7 +324,6 @@ public class MusicSyncer {
         final FilenameFilter musicFilter = new FilenameFilter() {
             @Override
             public boolean accept(File dir, String name) {
-                System.out.println("Comparing " + name + " to " + strFile);
                 return name.equals(strFile);
             }
         };
