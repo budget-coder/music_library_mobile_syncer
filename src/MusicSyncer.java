@@ -1,5 +1,8 @@
 import java.awt.Color;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,10 +28,8 @@ import org.jaudiotagger.tag.id3.AbstractID3v2Tag;
 import org.jaudiotagger.tag.id3.ID3v23Frames;
 import org.jaudiotagger.tag.id3.ID3v24Frames;
 import org.jaudiotagger.tag.mp4.Mp4Tag;
-import org.jaudiotagger.tag.reference.GenreTypes;
 
 public class MusicSyncer {    
-    private long TEMP_LAST_MODIFIED = Long.MIN_VALUE; // TODO Get this from the previous list, if any.
     private String dstFolder;
     private String srcFolder;
     private boolean optionAddNewMusic;
@@ -69,8 +70,10 @@ public class MusicSyncer {
                 ID3v23Frames.FRAME_ID_V3_TRACK, ID3v23Frames.FRAME_ID_V3_SET,
                 ID3v23Frames.FRAME_ID_V3_GENRE, ID3v23Frames.FRAME_ID_V3_COMPOSER));
         listOfMP4Keys = Collections.unmodifiableList(Arrays.asList(
-                FieldKey.TITLE, FieldKey.ARTIST, FieldKey.ALBUM_ARTIST,
-                FieldKey.ALBUM, FieldKey.YEAR, FieldKey.TRACK, FieldKey.DISC_NO,
+                FieldKey.TITLE, FieldKey.ARTIST,
+                FieldKey.ALBUM_ARTIST,
+                FieldKey.ALBUM, FieldKey.YEAR,
+                FieldKey.TRACK, FieldKey.DISC_NO,
                 FieldKey.GENRE, FieldKey.COMPOSER));
     }
     
@@ -105,13 +108,19 @@ public class MusicSyncer {
         // Note that we want to locally scope variables as much as possible:
         // http://stackoverflow.com/questions/8803674/declaring-variables-inside-or-outside-of-a-loop/8878071#8878071
         boolean didAllGoWell = true;
-        List<File> listOfSrc = new ArrayList<>();
+        List<File> sortedListOfSrc = new ArrayList<>();
+        File[] listOfSrc = folderSrc.listFiles();
         File[] listOfDst = folderDst.listFiles();
+        List<DoubleWrapper<String, Long>> lastSession = tryToLoadPreviousSession();
         StyleConstants.setForeground(attr, Color.BLACK);
         UI.writeStatusMessage("List of src and dst folders completed. Checking for differences...", attr);
 
         // The file-search algorithm
-        for (final File fileEntry : folderSrc.listFiles()) {
+        // TODO Explain the extra index
+        int lastSessionIndex = 0;
+        for (int i = 0; i < listOfSrc.length; i++) {
+            final File fileEntry = listOfSrc[i];
+
             if (optionSearchInSubdirectories && fileEntry.isDirectory()) {
                 // If a folder was found, and the user wants it, then search it.
                 // TODO Will not be tested with the current directory
@@ -120,33 +129,75 @@ public class MusicSyncer {
             } else {
                 // Get file name and extension, if any.
                 final String strFile = fileEntry.getName();
-                final int index = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
-                final String strExt = strFile.substring(index + 1);
-                /* TODO For optimization when a previous .txt library file is used.
-                if (!shouldFileBeAddedToList(fileEntry.lastModified(), index, strExt)) {
-                    // This file has not been modified, has no filetype, or has an incompatible extension.
-                    continue;
+                final int fileExtIndex = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
+                final String strExt = strFile.substring(fileExtIndex + 1);
+                final long fileLastMod = fileEntry.lastModified();
+                // Careful of IndexOutOfBoundExceptions.
+                if (lastSession.size() >= lastSessionIndex) {
+                    final boolean isSameFile = lastSession.get(lastSessionIndex).getArg1().equals(strFile);
+                    final boolean hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileLastMod;
+                    // We assume that, for the most part, most music is unchanged from last session.
+                    if (isSameFile) {
+                        if (!hasBeenModified) {
+                            continue;
+                        }
+                        // To make it case-insensitive (and avoid problems with
+                        // Turkish), convert to uppercase.
+                        switch (strExt.toUpperCase()) {
+                        // Exploit the concept of fallthrough.
+                        case "MP3":
+                        case "M4A":
+                            sortedListOfSrc.add(fileEntry);
+                            break;
+                        default:
+                            // "These are not the files you are looking for."
+                            continue;
+                        }
+                        // Copy new music to dst if the option was checked.
+                        // TODO This should be the last operation in the whole program because it adds unnecessary comparisons (at minimum n-checks!).
+                        if (optionAddNewMusic) {
+                            checkAndAddNewMusicToDst(fileEntry, folderSrc, folderDst);
+                        }
+                        continue;
+                    }
+                    // Although it is not the same file, we have to make
+                    // absolutely sure that it is not further down the last
+                    // session file.
+                    int lastSessionIndexCopy = lastSessionIndex;
+                    boolean isOutOfBound = lastSession.size() < lastSessionIndexCopy || lastSessionIndexCopy < 0;
+                    boolean isPreceedingCurrentFile = false;
+                    boolean isFollowingCurrentFile = false;
+                    do {
+                        int currentFileComparedToPreviousVersion = lastSession.get(lastSessionIndex).getArg1().compareTo(strFile); 
+                        if (currentFileComparedToPreviousVersion < 0) {
+                            // We are too low behind in our session list.
+                            if (isFollowingCurrentFile) {
+                                // The previous session did not contain the current file.
+                                break;
+                            }
+                            isPreceedingCurrentFile = true;
+                            lastSessionIndexCopy++;
+                        } else if (currentFileComparedToPreviousVersion > 0) {
+                            // We are too far ahead in our session list.
+                            if (isPreceedingCurrentFile) {
+                                break;
+                            }
+                            isFollowingCurrentFile = true;
+                            lastSessionIndexCopy--;
+                        }
+                        isOutOfBound = lastSession.size() < lastSessionIndexCopy || lastSessionIndexCopy < 0;
+                    } while (!isOutOfBound);
                 }
-                */
-                // To make it case-insensitive (and avoid problems with
-                // Turkish), convert to uppercase.
-                switch (strExt.toUpperCase()) {
-                // Exploit the concept of fallthrough.
-                case "MP3":
-                case "M4A":
-                    listOfSrc.add(fileEntry);
-                    break;
-                default:
-                    // "These are not the files you are looking for."
-                    continue;
-                }
-                // Copy new music to dst if the option was checked.
-                
-                if (optionAddNewMusic) {
-                    addNewMusicToDst(fileEntry, folderSrc, folderDst);
-                }
+                // TODO Ran out of space in last session file. What now?
             }
         }
+        // Determine which files that need syncing.
+        /*
+        if (lastModified <= TEMP_LAST_MODIFIED || index < 0) {
+            returnCode = false;
+        }
+        */
+        
         StyleConstants.setForeground(attr, Color.BLACK);
         UI.writeStatusMessage("Done searching through the src folder. Checking for differences...", attr);
         
@@ -167,6 +218,7 @@ public class MusicSyncer {
                             continue;
                         }
                         isTheMusicOrphaned = false;
+                        // TODO DELETE THIS CHECK WHEN THE LASTMODIFIED TXT WORKS.
                         if (fileEntrySrc.lastModified() >= fileEntryDst.lastModified()) {
                             // Only update metadata if the user updated the src file.
                             updateMP3MetaData(fileEntrySrc, fileEntryDst);
@@ -204,6 +256,7 @@ public class MusicSyncer {
             } catch (InvalidAudioFrameException | CannotReadException
                     | IOException | TagException
                     | ReadOnlyFileException | CannotWriteException e) {
+                // TODO Use a logger just like in hotciv/cave
                 System.err.println("FATAL: " + e.toString());
             }
         }
@@ -222,21 +275,10 @@ public class MusicSyncer {
         return didAllGoWell;
     }
 
-    /* TODO Use this method, specifically the part with the lastModified date,
-     * when comparing with an existing .txt file. 
-    private static boolean shouldFileBeAddedToList(long lastModified, int index, String strExt) {
-        boolean returnCode;
-        if (lastModified <= TEMP_LAST_MODIFIED || index < 0) {
-            returnCode = false;
-        } else {
-            returnCode = true;
-        }
-        return returnCode;
-    }
-    */
-
     /**
-     * For optimization, this method should only be called when the MP3 file has been modified!
+     * For optimization, this method should only be called when the MP3 file has
+     * been modified!
+     * 
      * @param fileSrc
      * @param fileDst
      * @throws CannotReadException
@@ -244,15 +286,15 @@ public class MusicSyncer {
      * @throws TagException
      * @throws ReadOnlyFileException
      * @throws InvalidAudioFrameException
-     * @throws CannotWriteException 
+     * @throws CannotWriteException
      */
     private void updateMP3MetaData(File fileSrc, File fileDst)
             throws CannotReadException, IOException, TagException,
             ReadOnlyFileException, InvalidAudioFrameException, CannotWriteException {
         // Here we need to make a wrapper class because we need the tag field
         // when updating music.
-        List<KeyTagDouble<String>> listOfTagsSrc = new ArrayList<>();
-        List<KeyTagDouble<FieldKey>> listOfTagsDst = new ArrayList<>();
+        List<DoubleWrapper<String, String>> listOfTagsSrc = new ArrayList<>();
+        List<DoubleWrapper<FieldKey, String>> listOfTagsDst = new ArrayList<>();
         // Read metadata from the files.
         AbstractID3v2Tag v2TagSrc = ((MP3File) AudioFileIO.read(fileSrc)).getID3v2Tag();
         MP3File mp3FileDst = (MP3File) AudioFileIO.read(fileDst);
@@ -267,20 +309,20 @@ public class MusicSyncer {
                                                       // lists are in the same
                                                       // order. Okay, this is
                                                       // really dangerous.
-            listOfTagsSrc.add(new KeyTagDouble<String>(key, v2TagSrc.getFirst(key)));
+            listOfTagsSrc.add(new DoubleWrapper<>(key, v2TagSrc.getFirst(key)));
             //System.out.println("THE KEY IS " + v2TagDst.getValue(fieldKey, 0));
             // TODO For some reason, it fucks up on the genre (for instance, (24) = soundtrack...)
             // TODO It does not seem to be able to handle YEARs with less than 4 digits well.
-            listOfTagsDst.add(new KeyTagDouble<FieldKey>(fieldKey, v2TagDst.getFirst(key)));
+            listOfTagsDst.add(new DoubleWrapper<>(fieldKey, v2TagDst.getFirst(key)));
         }
         // Now for the comparisons.
-        KeyTagDouble<FieldKey> keyTagFile;
+        DoubleWrapper<FieldKey, String> keyTagFile;
         for (int i = 0; i < listOfTagsSrc.size(); i++) {
             keyTagFile = listOfTagsDst.get(i);
-            if (!listOfTagsSrc.get(i).getTag().equals(keyTagFile.getTag())) {
+            if (!listOfTagsSrc.get(i).getArg2().equals(keyTagFile.getArg2())) {
                 // Update metadata of the target music file.
-                System.out.println("Replacing tag " + listOfTagsDst.get(i).getTag() + " with " + listOfTagsSrc.get(i).getTag() + " with field " + keyTagFile.getKey());
-                v2TagDst.setField(keyTagFile.getKey(), listOfTagsSrc.get(i).getTag());
+                System.out.println("Replacing tag " + listOfTagsDst.get(i).getArg2() + " with " + listOfTagsSrc.get(i).getArg2() + " with field " + keyTagFile.getArg1());
+                v2TagDst.setField(keyTagFile.getArg1(), listOfTagsSrc.get(i).getArg2());
                 mp3FileDst.setTag(v2TagDst);
                 mp3FileDst.commit();
             }
@@ -291,8 +333,8 @@ public class MusicSyncer {
     private void updateM4AMetaData(File fileSrc, File fileDst)
             throws CannotReadException, IOException, TagException,
             ReadOnlyFileException, InvalidAudioFrameException, CannotWriteException {
-        List<KeyTagDouble<FieldKey>> listOfTagsSrc = new ArrayList<>();
-        List<KeyTagDouble<FieldKey>> listOfTagsDst = new ArrayList<>();
+        List<DoubleWrapper<FieldKey, String>> listOfTagsSrc = new ArrayList<>();
+        List<DoubleWrapper<FieldKey, String>> listOfTagsDst = new ArrayList<>();
         // Read metadata from the files.
         Mp4Tag mp4FileSrc = (Mp4Tag) AudioFileIO.read(fileSrc).getTag();
         AudioFile mp4AudioFileDst = AudioFileIO.read(fileDst);
@@ -301,22 +343,22 @@ public class MusicSyncer {
         // Get each relevant tag from src and dst version of the file and save
         // them in lists for later comparisons.
         for (FieldKey key : listOfMP4Keys) {
-            listOfTagsSrc.add(new KeyTagDouble<FieldKey>(key, mp4FileSrc.getFirst(key)));
-            listOfTagsDst.add(new KeyTagDouble<FieldKey>(key, mp4FileDst.getFirst(key)));
+            listOfTagsSrc.add(new DoubleWrapper<>(key, mp4FileSrc.getFirst(key)));
+            listOfTagsDst.add(new DoubleWrapper<>(key, mp4FileDst.getFirst(key)));
         }
         // Now for the comparisons.
-        KeyTagDouble<FieldKey> keyTagFile;
+        DoubleWrapper<FieldKey, String> keyTagFile;
         for (int i = 0; i < listOfTagsSrc.size(); i++) {
             keyTagFile = listOfTagsDst.get(i);
-            if (!listOfTagsSrc.get(i).getTag().equals(keyTagFile.getTag())) {
+            if (!listOfTagsSrc.get(i).getArg2().equals(keyTagFile.getArg2())) {
                 // Update metadata of the target music file.
-                mp4FileDst.setField(keyTagFile.getKey(), listOfTagsSrc.get(i).getTag());
+                mp4FileDst.setField(keyTagFile.getArg1(), listOfTagsSrc.get(i).getArg2());
                 mp4AudioFileDst.commit();
             }
         }
     }
     
-    private void addNewMusicToDst(final File fileEntry, final File folderSrc,
+    private void checkAndAddNewMusicToDst(final File fileEntry, final File folderSrc,
             final File folderDst) {
         // Filter for searching for a specific music file.
         // TODO This runs n^2 times.......
@@ -346,5 +388,46 @@ public class MusicSyncer {
     private boolean tryToDeleteOrphanedMusicInDst(File fileEntryDst) {
         // TODO Per the documentation, this can throw an IOException if the operation was unsuccessful. 
         return fileEntryDst.delete();
+    }
+    
+    /**
+     * ...
+     * The music contained in the .txt file should be sorted in an
+     * alphabetic order. Use this fact to search through this list and the
+     * current list of music (i.e. the src folder) at the same time. TODO Do
+     * this in parallel with the actual tagging. Something along the lines of a
+     * queue which amasses a list of music to be modified.
+     * 
+     * @return 
+     */
+    private List<DoubleWrapper<String, Long>> tryToLoadPreviousSession() {
+        File lastSession = new File("MLMS_LastSession.txt");
+        // If the file does not exist, then create it for the future syncing.
+        if (!lastSession.exists()) {
+            try {
+                lastSession.createNewFile();
+            } catch (IOException e) {
+                System.out.println("FATAL: Could not create a file to store the current list of music in!");
+            }
+        }
+        List<DoubleWrapper<String, Long>> lastSessionList = new ArrayList<>();  
+        // Try-with-ressources to ensure that the stream is closed.
+        try (BufferedReader br = new BufferedReader(new FileReader(lastSession))) {
+            // Syntax: name of file on the first line and its last modified date on the next line.
+            String line = br.readLine();
+            while (line != null) {
+                String name = line;
+                long lastMod = Long.parseLong(br.readLine());
+                lastSessionList.add(new DoubleWrapper<>(name, lastMod));
+                line = br.readLine();
+            }
+        } catch (FileNotFoundException e) {
+            SimpleAttributeSet attr = new SimpleAttributeSet();
+            StyleConstants.setForeground(attr, Color.BLUE);
+            UI.writeStatusMessage("No last sync session was found.", attr);
+        } catch (IOException e) {
+            System.err.println("Error when loading last sync session: " + e.getMessage());
+        }
+        return lastSessionList;
     }
 }
