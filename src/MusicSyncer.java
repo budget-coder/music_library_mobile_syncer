@@ -137,11 +137,12 @@ public class MusicSyncer {
                 final String strExt = strFile.substring(fileExtIndex + 1);
                 final long fileLastMod = fileEntry.lastModified();
                 // Try to locate the file in the previous session instead of checking all the metadata.
-                if (lastSession.size() >= lastSessionIndex) {
+                if (lastSessionIndex < lastSession.size()) {
                     final boolean isSameFile = lastSession.get(lastSessionIndex).getArg1().equals(strFile);
                     final boolean hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileLastMod;
                     // We assume that, for the most part, most music is unchanged from last session.
                     if (!isSameFile) {
+                        System.out.println("Not the same file! Will try and look...");
                         // Although it is not the same file, we have to make
                         // absolutely sure that it is not further down the last
                         // session file.
@@ -149,6 +150,7 @@ public class MusicSyncer {
                         if (!wasFileLocated || !hasBeenModified) {
                             continue;
                         }
+                        System.out.println("Yay, I found the file <3");
                     } else {
                         currentSession += strFile + "\n";
                         currentSession += fileLastMod + "\n";
@@ -434,8 +436,12 @@ public class MusicSyncer {
             String line = br.readLine();
             while (line != null) {
                 String name = line;
-                long lastMod = Long.parseLong(br.readLine());
-                lastSessionList.add(new DoubleWrapper<>(name, lastMod));
+                line = br.readLine();
+                // To avoid NumberFormatException on empty lines.
+                if (line != null) {
+                    long lastMod = Long.parseLong(line);
+                    lastSessionList.add(new DoubleWrapper<>(name, lastMod));
+                }
                 line = br.readLine();
             }
         } catch (FileNotFoundException e) {
