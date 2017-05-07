@@ -310,7 +310,7 @@ public class UI extends JFrame {
             } catch (FileNotFoundException e) {
                 SimpleAttributeSet attr = new SimpleAttributeSet();
                 StyleConstants.setForeground(attr, Color.BLUE);
-                writeStatusMessage("No previous settings were found.", null);
+                writeStatusMessage("No previous settings were found.", attr);
             } catch (IOException e) {
                 System.err.println("Error when loading settings: " + e.getMessage());
             }
