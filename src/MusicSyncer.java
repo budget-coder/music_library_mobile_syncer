@@ -84,14 +84,10 @@ public class MusicSyncer {
     public void initiate() throws InterruptedException {
         File fileFolderSrc = new File(srcFolder.replace('\\', '/'));
         File fileFolderDst = new File(dstFolder.replace("\\", "/"));
-        final boolean doesSrcAndDstExist = (fileFolderSrc.exists()
-                && fileFolderSrc.isDirectory())
-                || (fileFolderDst.exists() && fileFolderDst.isDirectory());
-        if (!doesSrcAndDstExist) {
+        if (fileFolderSrc.isDirectory() && fileFolderDst.isDirectory()) {
             StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
             UI.writeStatusMessage("ERROR: The source/target folder is not a folder or does not exist.", attr);
         } else {
-            // Reuse the variable
             listFilesOfFolder(fileFolderSrc, fileFolderDst);
         }
     }
