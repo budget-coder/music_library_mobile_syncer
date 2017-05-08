@@ -110,10 +110,9 @@ public class UI extends JFrame {
         statusTextDoc = new DefaultStyledDocument();
         statusText = new JTextPane(statusTextDoc);
         statusText.setEditable(false);
-        /* For JTextArea
-        statusText.setLineWrap(true);
-        statusText.setWrapStyleWord(true);
-        */
+        // TODO Implement autoscroll.
+        // http://stackoverflow.com/questions/8789371/java-jtextpane-jscrollpane-de-activate-automatic-scrolling,
+        // https://tips4java.wordpress.com/2008/10/22/text-area-scrolling/
         statusText.setText("Status window:\n");
         centerPanel.setViewportView(statusText);
         
