@@ -194,7 +194,7 @@ public class MusicSyncer {
                      */
                     listOfNewMusic.add(fileEntrySrc);
                 } else {
-                    System.out.println("ADDING " + fileEntrySrc.getName() + " TO LISTY. I thought it was modified? " + hasBeenModified);
+                    // System.out.println("ADDING " + fileEntrySrc.getName() + " TO LISTY. I thought it was modified? " + hasBeenModified);
                     sortedListOfSrc.add(fileEntrySrc);
                 }
                 break;
@@ -220,12 +220,12 @@ public class MusicSyncer {
                 switch (strExt.toUpperCase()) {
                 case "MP3":
                     File mp3InDst = new File(dstFolderFile.getAbsolutePath() + "\\" + fileEntrySorted.getName());
-                    updateMP3MetaData(fileEntrySorted, mp3InDst);
+                    updateMP3MetaData(fileEntrySorted, mp3InDst, listOfNewMusic);
                     break;
                 case "M4A":
                     // M4A are structurally the same as MP4 files.
                     File m4aInDst = new File(dstFolderFile.getAbsolutePath() + "\\" + fileEntrySorted.getName());
-                    updateM4AMetaData(fileEntrySorted, m4aInDst);
+                    updateM4AMetaData(fileEntrySorted, m4aInDst, listOfNewMusic);
                     break;
                 default:
                     break; // This was not music
@@ -243,6 +243,13 @@ public class MusicSyncer {
         }
     }
 
+    /**
+     * 
+     * @param lastSession
+     * @param lastSessionIndex
+     * @param strFile
+     * @return
+     */
     private DoubleWrapper<Boolean, Long> tryToLocateFileInPreviouSession(
             List<DoubleWrapper<String, Long>> lastSession, int lastSessionIndex,
             String strFile) {
@@ -290,6 +297,7 @@ public class MusicSyncer {
      * 
      * @param fileSrc
      * @param fileDst
+     * @param listOfNewMusic TODO
      * @throws CannotReadException
      * @throws IOException
      * @throws TagException
@@ -297,7 +305,7 @@ public class MusicSyncer {
      * @throws InvalidAudioFrameException
      * @throws CannotWriteException
      */
-    private void updateMP3MetaData(File fileSrc, File fileDst)
+    private void updateMP3MetaData(File fileSrc, File fileDst, List<File> listOfNewMusic)
             throws CannotReadException, IOException, TagException,
             ReadOnlyFileException, InvalidAudioFrameException, CannotWriteException {
         // Here we need to make a wrapper class because we need the tag field
@@ -339,12 +347,12 @@ public class MusicSyncer {
             }
         }
         if (!didIDetectAChange) {
-            addNewMusicToDst(fileSrc, srcFolderFile, dstFolderFile);
+            listOfNewMusic.add(fileSrc);
         }
     }
     
     // TODO This feels a lot like duplicate code but how should it be improved?
-    private void updateM4AMetaData(File fileSrc, File fileDst)
+    private void updateM4AMetaData(File fileSrc, File fileDst, List<File> listOfNewMusic)
             throws CannotReadException, IOException, TagException,
             ReadOnlyFileException, InvalidAudioFrameException, CannotWriteException {
         List<DoubleWrapper<FieldKey, String>> listOfTagsSrc = new ArrayList<>();
@@ -362,6 +370,7 @@ public class MusicSyncer {
         }
         // Now for the comparisons.
         DoubleWrapper<FieldKey, String> keyTagFile;
+        boolean didIDetectAChange = false;
         for (int i = 0; i < listOfTagsSrc.size(); i++) {
             keyTagFile = listOfTagsDst.get(i);
             if (!listOfTagsSrc.get(i).getArg2().equals(keyTagFile.getArg2())) {
@@ -369,6 +378,9 @@ public class MusicSyncer {
                 mp4FileDst.setField(keyTagFile.getArg1(), listOfTagsSrc.get(i).getArg2());
                 mp4AudioFileDst.commit();
             }
+        }
+        if (!didIDetectAChange) {
+            listOfNewMusic.add(fileSrc);
         }
     }
     
