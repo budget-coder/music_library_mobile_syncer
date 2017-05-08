@@ -108,14 +108,15 @@ public class MusicSyncer {
         optionSearchInSubdirectories = option;
     }
 
-    private boolean listFilesOfFolder() {
+    private void listFilesOfFolder() {
         // Note that we want to locally scope variables as much as possible:
         // http://stackoverflow.com/questions/8803674/declaring-variables-inside-or-outside-of-a-loop/8878071#8878071
-        boolean didAllGoWell = true;
         File[] listOfSrc = srcFolderFile.listFiles();
         File[] listOfDst = dstFolderFile.listFiles();
         // A list with only the modified music.
         List<File> sortedListOfSrc = new ArrayList<>();
+        // A list with only the music to be added.
+        List<File> listOfNewMusic = new ArrayList<>();
         StringBuilder currentSession = new StringBuilder();
         List<DoubleWrapper<String, Long>> lastSession = tryToLoadPreviousSession();
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
@@ -185,9 +186,13 @@ public class MusicSyncer {
                 if (wasFileLocated && !hasBeenModified) {
                     continue;
                 } else if (optionAddNewMusic && !doesFileInDstExist) {
-                    // Copy new music to dst if the option was checked.
-                    // TODO This should be the last operation in the whole program because it adds unnecessary comparisons (at minimum n-checks!).
-                    addNewMusicToDst(fileEntrySrc, srcFolderFile, dstFolderFile);
+                    /*
+                     * If the option was checked, "mark" new music by adding
+                     * them to a list whose contents will be added later. This
+                     * should be the last operation in the whole program because
+                     * it adds unnecessary comparisons (at minimum n-checks!).
+                     */
+                    listOfNewMusic.add(fileEntrySrc);
                 } else {
                     System.out.println("ADDING " + fileEntrySrc.getName() + " TO LISTY. I thought it was modified? " + hasBeenModified);
                     sortedListOfSrc.add(fileEntrySrc);
@@ -232,7 +237,10 @@ public class MusicSyncer {
                 System.err.println("FATAL: " + e.toString());
             }
         }
-        return didAllGoWell;
+        
+        for (final File newMusic : listOfNewMusic) {
+            addNewMusicToDst(newMusic, srcFolderFile, dstFolderFile);
+        }
     }
 
     private DoubleWrapper<Boolean, Long> tryToLocateFileInPreviouSession(
@@ -365,31 +373,6 @@ public class MusicSyncer {
     }
     
     private void addNewMusicToDst(final File fileEntry, final File folderSrc, final File folderDst) {
-        /*
-        // Filter for searching for a specific music file.
-        // TODO This runs n^2 times.......
-        final String strFile = fileEntry.getName();
-        final FilenameFilter musicFilter = new FilenameFilter() {
-            @Override
-            public boolean accept(File dir, String name) {
-                return name.equals(strFile);
-            }
-        };
-        if (folderDst.list(musicFilter).length <= 0) {
-            try {
-                // Convert dst folder's path correctly.
-                Path targetPath = folderDst.toPath()
-                        .resolve(folderSrc.toPath()
-                                .relativize(fileEntry.toPath()));
-                Files.copy(fileEntry.toPath(), targetPath);
-                StyleConstants.setForeground(attr, DataClass.NEW_MUSIC_COLOR);
-                UI.writeStatusMessage("Added " + fileEntry.getName() + ".", attr);
-            } catch (IOException e) {
-                StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
-                UI.writeStatusMessage("FATAL: Could not copy " + fileEntry.getName() + " to destination.", attr);
-            }
-        }
-        */
         String strFile = fileEntry.getName();
         try {
             Path targetPath = folderDst.toPath().resolve(
@@ -415,7 +398,6 @@ public class MusicSyncer {
      *            the path to the folder.
      */
     private void lookAndDeleteOrphanedMusicInDst(File[] listOfFolder, String pathOfFolder) {
-        // TODO Per the documentation, this can throw an IOException if the operation was unsuccessful.
         for (final File fileEntryDst : listOfFolder) {
             File fileOnSrc = new File(pathOfFolder + "\\" + fileEntryDst.getName());
             if (fileOnSrc.exists()) {
