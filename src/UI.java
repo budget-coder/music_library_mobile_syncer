@@ -251,7 +251,6 @@ public class UI extends JFrame {
                                 srcBrowseButton.setEnabled(true);
                                 dstBrowseButton.setEnabled(true);
                             }
-                            // When done, change the text back
                         }
                     };
                     musicSyncerThread = new Thread(musicSyncerRunnable);
