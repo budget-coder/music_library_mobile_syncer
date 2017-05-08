@@ -1,3 +1,4 @@
+package data;
 public class DoubleWrapper<Arg1, Arg2> {
     private Arg1 arg1;
     private Arg2 arg2;

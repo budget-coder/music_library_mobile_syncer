@@ -1,3 +1,4 @@
+package data;
 import java.awt.Color;
 
 public class DataClass {
