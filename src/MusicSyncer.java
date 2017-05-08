@@ -139,6 +139,7 @@ public class MusicSyncer {
                 final long fileLastMod = fileEntry.lastModified();
                 // Try to locate the file in the previous session instead of checking all the metadata.
                 if (lastSessionIndex < lastSession.size()) {
+                    System.out.println("The previous session is still ready to go!");
                     final boolean isSameFile = lastSession.get(lastSessionIndex).getArg1().equals(strFile);
                     boolean hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileLastMod;
                     // We assume that, for the most part, most music is unchanged from last session.
@@ -157,8 +158,13 @@ public class MusicSyncer {
                     } else {
                         updateCurrentSession(currentSession, strFile, fileLastMod);
                         lastSessionIndex++;
-                        if (!hasBeenModified) {
+                        // Check if the music exists in dst.
+                        File fileOnDst = new File(folderDst.getAbsolutePath() + "\\" + strFile);
+                        if (!hasBeenModified && fileOnDst.exists()) {
                             continue;
+                        }
+                        else if (!fileOnDst.exists()) {
+                            System.out.println("The file " + strFile + " does NOT exist in dst.");
                         }
                     }
                     isCurrentSessionUpdated = true;
@@ -208,7 +214,7 @@ public class MusicSyncer {
                 case "MP3":
                     // Only start comparing metadata if both dir have the file.
                     // TODO This is ugly and slow as fuck
-                    for (final File fileEntrySrc : listOfSrc) {
+                    for (final File fileEntrySrc : sortedListOfSrc) {
                         if (!(fileEntrySrc.getName().equals(fileEntryDst.getName()))) { // Do nothing because file was not found.
                             continue;
                         }
@@ -223,7 +229,7 @@ public class MusicSyncer {
                     break;
                 case "M4A":
                     // M4A are structurally the same as MP4 files.
-                    for (final File fileEntrySrc : listOfSrc) {
+                    for (final File fileEntrySrc : sortedListOfSrc) {
                         if (!(fileEntrySrc.getName().equals(fileEntryDst.getName()))) { // Do nothing because file was not found.
                             continue;
                         }
