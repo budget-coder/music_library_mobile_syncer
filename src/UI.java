@@ -324,7 +324,13 @@ public class UI extends JFrame {
         return returnArray;
     }
 
-    public static void writeStatusMessage(String message, MutableAttributeSet attributeSet) {
+    /**
+     * ...
+     * Only package visible to avoid calls from, for instance, the test package.
+     * @param message
+     * @param attributeSet
+     */
+    static void writeStatusMessage(String message, MutableAttributeSet attributeSet) {
         try {
             statusTextDoc.insertString(statusTextDoc.getLength(), message + "\n", attributeSet);
         } catch (BadLocationException e) {
