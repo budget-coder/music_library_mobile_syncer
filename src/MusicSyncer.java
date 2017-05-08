@@ -112,8 +112,9 @@ public class MusicSyncer {
         boolean didAllGoWell = true;
         File[] listOfSrc = folderSrc.listFiles();
         File[] listOfDst = folderDst.listFiles();
-        List<File> sortedListOfSrc = new ArrayList<>();
-        String currentSession = "";
+        // A list with only the modified music.
+        List<File> sortedListOfSrc = new ArrayList<>(); // TODO Do remember to use this list...
+        StringBuilder currentSession = new StringBuilder();
         List<DoubleWrapper<String, Long>> lastSession = tryToLoadPreviousSession();
         StyleConstants.setForeground(attr, Color.BLACK);
         UI.writeStatusMessage("List of src and dst folders completed. Checking for differences...", attr);
@@ -139,26 +140,28 @@ public class MusicSyncer {
                 // Try to locate the file in the previous session instead of checking all the metadata.
                 if (lastSessionIndex < lastSession.size()) {
                     final boolean isSameFile = lastSession.get(lastSessionIndex).getArg1().equals(strFile);
-                    final boolean hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileLastMod;
+                    boolean hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileLastMod;
                     // We assume that, for the most part, most music is unchanged from last session.
                     if (!isSameFile) {
-                        System.out.println("Not the same file! Will try and look...");
                         // Although it is not the same file, we have to make
                         // absolutely sure that it is not further down the last
                         // session file.
-                        boolean wasFileLocated = tryToLocateFileInPreviouSession(lastSession, lastSessionIndex, strFile);
-                        if (!wasFileLocated || !hasBeenModified) {
+                        DoubleWrapper<Boolean, Long> locateFileWrapper = tryToLocateFileInPreviouSession(lastSession, lastSessionIndex, strFile);
+                        final boolean wasFileLocated = locateFileWrapper.getArg1();
+                        hasBeenModified = locateFileWrapper.getArg2() != fileLastMod;
+                        updateCurrentSession(currentSession, strFile, fileLastMod);
+                        lastSessionIndex++;
+                        if (wasFileLocated && !hasBeenModified) {
                             continue;
                         }
-                        System.out.println("Yay, I found the file <3");
                     } else {
-                        currentSession += strFile + "\n";
-                        currentSession += fileLastMod + "\n";
+                        updateCurrentSession(currentSession, strFile, fileLastMod);
+                        lastSessionIndex++;
                         if (!hasBeenModified) {
                             continue;
                         }
-                        isCurrentSessionUpdated = true;
                     }
+                    isCurrentSessionUpdated = true;
                 }
                 // To make it case-insensitive (and avoid problems with
                 // Turkish), convert to uppercase.
@@ -167,8 +170,7 @@ public class MusicSyncer {
                 case "MP3":
                 case "M4A":
                     if (!isCurrentSessionUpdated) {
-                        currentSession += strFile + "\n";
-                        currentSession += fileLastMod + "\n";
+                        updateCurrentSession(currentSession, strFile, fileLastMod);
                     }
                     sortedListOfSrc.add(fileEntry);
                     lastSessionIndex++;
@@ -186,7 +188,7 @@ public class MusicSyncer {
         }
         // When all is finished and done, save the list of music to a .txt file (will overwrite existing).
         try {
-            Files.write(Paths.get("MLMS_LastSession.txt"), Arrays.asList(currentSession), Charset.forName("UTF-8"));
+            Files.write(Paths.get("MLMS_LastSession.txt"), Arrays.asList(currentSession.toString()), Charset.forName("UTF-8"));
         } catch (IOException e) {
             System.err.println("ERROR: Could not save a list of the music to a .txt file!");
         }
@@ -253,11 +255,10 @@ public class MusicSyncer {
                 System.err.println("FATAL: " + e.toString());
             }
         }
-        
         return didAllGoWell;
     }
 
-    private boolean tryToLocateFileInPreviouSession(
+    private DoubleWrapper<Boolean, Long> tryToLocateFileInPreviouSession(
             List<DoubleWrapper<String, Long>> lastSession, int lastSessionIndex,
             String strFile) {
         // TODO Ya better add a description of this fuckery. :D
@@ -266,7 +267,7 @@ public class MusicSyncer {
         boolean isFollowingCurrentFile = false;
         boolean wasFileLocated = false;
         do {
-            int currentFileComparedToPreviousVersion = lastSession.get(lastSessionIndex).getArg1().compareTo(strFile); 
+            int currentFileComparedToPreviousVersion = lastSession.get(lastSessionIndex).getArg1().compareTo(strFile);
             if (currentFileComparedToPreviousVersion < 0) {
                 // We are too low behind in our session list.
                 if (isFollowingCurrentFile) {
@@ -291,7 +292,10 @@ public class MusicSyncer {
             }
             isOutOfBound = lastSession.size() < lastSessionIndex || lastSessionIndex < 0;
         } while (!isOutOfBound && !wasFileLocated);
-        return wasFileLocated;
+        if (!isOutOfBound) {
+            return new DoubleWrapper<Boolean, Long>(wasFileLocated, lastSession.get(lastSessionIndex).getArg2());
+        }
+        return new DoubleWrapper<Boolean, Long>(wasFileLocated, 0L);
     }
 
     /**
@@ -417,7 +421,7 @@ public class MusicSyncer {
      * this in parallel with the actual tagging. Something along the lines of a
      * queue which amasses a list of music to be modified.
      * 
-     * @return 
+     * @return a list containing the previous session
      */
     private List<DoubleWrapper<String, Long>> tryToLoadPreviousSession() {
         File lastSession = new File("MLMS_LastSession.txt");
@@ -452,5 +456,17 @@ public class MusicSyncer {
             System.err.println("Error when loading last sync session: " + e.getMessage());
         }
         return lastSessionList;
+    }
+    
+    /**
+     * ...
+     * Use a StringBuilder to pass the reference to the string by value.
+     * @param currentSession
+     * @param strFile
+     * @param fileLastMod
+     */
+    private void updateCurrentSession(StringBuilder currentSession, String strFile, long fileLastMod) {
+        currentSession.append(strFile + "\n");
+        currentSession.append(fileLastMod + "\n");
     }
 }
