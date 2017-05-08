@@ -1,4 +1,3 @@
-import java.awt.Color;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -30,8 +29,6 @@ import org.jaudiotagger.tag.id3.AbstractID3v2Tag;
 import org.jaudiotagger.tag.id3.ID3v23Frames;
 import org.jaudiotagger.tag.id3.ID3v24Frames;
 import org.jaudiotagger.tag.mp4.Mp4Tag;
-
-import javafx.scene.chart.PieChart.Data;
 
 public class MusicSyncer {    
     private String dstFolder;
@@ -85,10 +82,10 @@ public class MusicSyncer {
         File fileFolderSrc = new File(srcFolder.replace('\\', '/'));
         File fileFolderDst = new File(dstFolder.replace("\\", "/"));
         if (fileFolderSrc.isDirectory() && fileFolderDst.isDirectory()) {
+            listFilesOfFolder(fileFolderSrc, fileFolderDst);
+        } else {
             StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
             UI.writeStatusMessage("ERROR: The source/target folder is not a folder or does not exist.", attr);
-        } else {
-            listFilesOfFolder(fileFolderSrc, fileFolderDst);
         }
     }
     
@@ -123,79 +120,65 @@ public class MusicSyncer {
             String folderSrcPath = folderSrc.getAbsolutePath();
             lookAndDeleteOrphanedMusicInDst(listOfDst, folderSrcPath);
         }
-        UI.writeStatusMessage("Checking for differences...", attr);
+        UI.writeStatusMessage("Finding files in src which have been updated since last session...", attr);
         // The file-search algorithm
         // TODO Explain the extra index
         int lastSessionIndex = 0;
         for (int i = 0; i < listOfSrc.length; i++) {
             final File fileEntrySrc = listOfSrc[i];
-            boolean isCurrentSessionUpdated = false;
-
             if (optionSearchInSubdirectories && fileEntrySrc.isDirectory()) {
                 // If a folder was found, and the user wants it, then search it.
                 // TODO Will not be tested with the current directory
                 System.out.println("Recursing through folder; THIS SHOULD NOT HAPPEN (FOR NOW)");
                 listFilesOfFolder(fileEntrySrc, folderDst);
-            } else {
-                // Get file name and extension, if any.
-                final String strFile = fileEntrySrc.getName();
-                final int fileExtIndex = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
-                final String strExt = strFile.substring(fileExtIndex + 1);
-                final long fileLastMod = fileEntrySrc.lastModified();
+                continue;
+            }
+            // Get file name and extension, if any.
+            final String strFile = fileEntrySrc.getName();
+            final int fileExtIndex = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
+            final String strExt = strFile.substring(fileExtIndex + 1);
+            final long fileLastMod = fileEntrySrc.lastModified();
+            // To make it case-insensitive (and avoid problems with
+            // Turkish), convert to uppercase.
+            switch (strExt.toUpperCase()) {
+            // Exploit the concept of fallthrough.
+            case "MP3":
+            case "M4A":
                 // Try to locate the file in the previous session instead of checking all the metadata.
                 if (lastSessionIndex < lastSession.size()) {
                     final boolean isSameFile = lastSession.get(lastSessionIndex).getArg1().equals(strFile);
                     boolean hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileLastMod;
+                    boolean wasFileLocated = false;
                     // We assume that, for the most part, most music is unchanged from last session.
                     if (!isSameFile) {
                         // Although it is not the same file, we have to make
                         // absolutely sure that it is not further down the last
                         // session file.
                         DoubleWrapper<Boolean, Long> locateFileWrapper = tryToLocateFileInPreviouSession(lastSession, lastSessionIndex, strFile);
-                        final boolean wasFileLocated = locateFileWrapper.getArg1();
+                        wasFileLocated = locateFileWrapper.getArg1();
                         hasBeenModified = locateFileWrapper.getArg2() != fileLastMod;
-                        updateCurrentSession(currentSession, strFile, fileLastMod);
-                        lastSessionIndex++;
-                        // Check if the music exists in dst.
-                        File fileOnDst = new File(folderDst.getAbsolutePath() + "\\" + strFile);
-                        System.out.println("Trying to find " + strFile + ". Could I? " + wasFileLocated);
-                        if (wasFileLocated && fileOnDst.exists() && !hasBeenModified) {
-                            continue;
-                        }
-                    } else {
-                        updateCurrentSession(currentSession, strFile, fileLastMod);
-                        lastSessionIndex++;
-                        // Check if the music exists in dst.
-                        File fileOnDst = new File(folderDst.getAbsolutePath() + "\\" + strFile);
-                        if (!hasBeenModified && fileOnDst.exists()) {
-                            continue;
-                        }
                     }
-                    isCurrentSessionUpdated = true;
-                }
-                // To make it case-insensitive (and avoid problems with
-                // Turkish), convert to uppercase.
-                switch (strExt.toUpperCase()) {
-                // Exploit the concept of fallthrough.
-                case "MP3":
-                case "M4A":
-                    if (!isCurrentSessionUpdated) {
-                        updateCurrentSession(currentSession, strFile, fileLastMod);
-                    }
-                    System.out.println("ADDING " + fileEntrySrc.getName() + " TO LISTY");
-                    sortedListOfSrc.add(fileEntrySrc);
+                    updateCurrentSession(currentSession, strFile, fileLastMod);
                     lastSessionIndex++;
-                    break;
-                default:
-                    continue; // "These are not the files you are looking for."
+                    File fileOnDst = new File(folderDst.getAbsolutePath() + "\\" + strFile);
+                    // Check if the music exists in dst.
+                    if (wasFileLocated && fileOnDst.exists() && !hasBeenModified) {
+                        continue;
+                    }
                 }
-                // Copy new music to dst if the option was checked.
-                // TODO This should be the last operation in the whole program because it adds unnecessary comparisons (at minimum n-checks!).
-                if (optionAddNewMusic) {
-                    checkAndAddNewMusicToDst(fileEntrySrc, folderSrc, folderDst);
-                }
-                continue;
+                // System.out.println("ADDING " + fileEntrySrc.getName() + " TO LISTY");
+                sortedListOfSrc.add(fileEntrySrc);
+                lastSessionIndex++;
+                break;
+            default:
+                continue; // "These are not the files you are looking for."
             }
+            // Copy new music to dst if the option was checked.
+            // TODO This should be the last operation in the whole program because it adds unnecessary comparisons (at minimum n-checks!).
+            if (optionAddNewMusic) {
+                checkAndAddNewMusicToDst(fileEntrySrc, folderSrc, folderDst);
+            }
+            continue;
         }
         // When all is finished and done, save the list of music to a .txt file (will overwrite existing).
         try {
@@ -204,7 +187,7 @@ public class MusicSyncer {
             System.err.println("ERROR: Could not save a list of the music to a .txt file!");
         }
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
-        UI.writeStatusMessage("Done searching through the src folder. Checking for differences...", attr);
+        UI.writeStatusMessage("Updating metadata...", attr);
         
         for (final File fileEntrySorted : sortedListOfSrc) {
             final String strFile = fileEntrySorted.getName();
@@ -268,7 +251,8 @@ public class MusicSyncer {
                 // Hoozah! We found the file.
                 wasFileLocated = true;
             }
-            isOutOfBound = lastSession.size() < lastSessionIndex || lastSessionIndex < 0;
+            isOutOfBound = lastSessionIndex >= lastSession.size() || lastSessionIndex < 0;
+            System.out.println("Am I out of bound? " + isOutOfBound + ". index: " + lastSessionIndex);
         } while (!isOutOfBound && !wasFileLocated);
         if (!isOutOfBound) {
             return new DoubleWrapper<Boolean, Long>(wasFileLocated, lastSession.get(lastSessionIndex).getArg2());
