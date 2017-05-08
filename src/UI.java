@@ -210,6 +210,7 @@ public class UI extends JFrame {
                 if (startButton.getText().equals("Stop!")) {
                     musicSyncerThread.interrupt();
                 } else {
+                    long timeStart = System.currentTimeMillis();
                     // Change the functionality of the button so that it stops
                     // execution when pressed again.
                     startButton.setText("Stop!");
@@ -242,6 +243,14 @@ public class UI extends JFrame {
                                 writeStatusMessage("Execution was stopped.", attr);
                             } finally {
                                 // Restore everything to its default value.
+                                SimpleAttributeSet attr = new SimpleAttributeSet();
+                                StyleConstants.setForeground(attr, Color.BLUE);
+                                writeStatusMessage("Finished.", attr);
+                                
+                                
+                                writeStatusMessage("Time taken: " + (System.currentTimeMillis() - timeStart) + " ms.", attr);
+                                
+                                
                                 startButton.setText("Start!");
                                 srcBrowseButton.setEnabled(true);
                                 dstBrowseButton.setEnabled(true);
