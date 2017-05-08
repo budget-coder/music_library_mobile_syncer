@@ -112,7 +112,7 @@ public class MusicSyncer {
         File[] listOfSrc = folderSrc.listFiles();
         File[] listOfDst = folderDst.listFiles();
         // A list with only the modified music.
-        List<File> sortedListOfSrc = new ArrayList<>(); // TODO Do remember to use this list...
+        List<File> sortedListOfSrc = new ArrayList<>();
         StringBuilder currentSession = new StringBuilder();
         List<DoubleWrapper<String, Long>> lastSession = tryToLoadPreviousSession();
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
@@ -149,6 +149,7 @@ public class MusicSyncer {
             case "MP3":
             case "M4A":
                 // Try to locate the file in the previous session instead of checking all the metadata.
+                updateCurrentSession(currentSession, strFile, fileLastMod);
                 if (lastSessionIndex < lastSession.size()) {
                     final boolean isSameFile = lastSession.get(lastSessionIndex).getArg1().equals(strFile);
                     boolean hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileLastMod;
@@ -162,7 +163,6 @@ public class MusicSyncer {
                         wasFileLocated = locateFileWrapper.getArg1();
                         hasBeenModified = locateFileWrapper.getArg2() != fileLastMod;
                     }
-                    updateCurrentSession(currentSession, strFile, fileLastMod);
                     lastSessionIndex++;
                     File fileOnDst = new File(folderDst.getAbsolutePath() + "\\" + strFile);
                     // Check if the music exists in dst.
@@ -256,7 +256,6 @@ public class MusicSyncer {
                 wasFileLocated = true;
             }
             isOutOfBound = lastSessionIndex >= lastSession.size() || lastSessionIndex < 0;
-            System.out.println("Am I out of bound? " + isOutOfBound + ". index: " + lastSessionIndex);
         } while (!isOutOfBound && !wasFileLocated);
         if (!isOutOfBound) {
             return new DoubleWrapper<Boolean, Long>(wasFileLocated, lastSession.get(lastSessionIndex).getArg2());
