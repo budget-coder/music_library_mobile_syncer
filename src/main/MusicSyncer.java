@@ -163,7 +163,12 @@ public class MusicSyncer {
                         wasFileLocated = locateFileWrapper.getArg1();
                         hasBeenModified = locateFileWrapper.getArg2() != fileLastMod;
                     }
-                    lastSessionIndex++;
+                    if (wasFileLocated) {
+                        // If and only if the file was located, then we can move
+                        // on to the next file entry. This is to avoid skipping
+                        // a file and prematurely finish the last session.
+                        lastSessionIndex++;
+                    }
                     File fileOnDst = new File(folderDst.getAbsolutePath() + "\\" + strFile);
                     // Check if the music exists in dst.
                     if (wasFileLocated && fileOnDst.exists() && !hasBeenModified) {
@@ -172,7 +177,6 @@ public class MusicSyncer {
                 }
                 // System.out.println("ADDING " + fileEntrySrc.getName() + " TO LISTY");
                 sortedListOfSrc.add(fileEntrySrc);
-                lastSessionIndex++;
                 break;
             default:
                 continue; // "These are not the files you are looking for."
