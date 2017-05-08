@@ -31,6 +31,8 @@ import org.jaudiotagger.tag.id3.ID3v23Frames;
 import org.jaudiotagger.tag.id3.ID3v24Frames;
 import org.jaudiotagger.tag.mp4.Mp4Tag;
 
+import javafx.scene.chart.PieChart.Data;
+
 public class MusicSyncer {    
     private String dstFolder;
     private String srcFolder;
@@ -86,7 +88,7 @@ public class MusicSyncer {
                 && fileFolderSrc.isDirectory())
                 || (fileFolderDst.exists() && fileFolderDst.isDirectory());
         if (!doesSrcAndDstExist) {
-            StyleConstants.setForeground(attr, Color.RED);
+            StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
             UI.writeStatusMessage("ERROR: The source/target folder is not a folder or does not exist.", attr);
         } else {
             // Reuse the variable
@@ -116,30 +118,36 @@ public class MusicSyncer {
         List<File> sortedListOfSrc = new ArrayList<>(); // TODO Do remember to use this list...
         StringBuilder currentSession = new StringBuilder();
         List<DoubleWrapper<String, Long>> lastSession = tryToLoadPreviousSession();
-        StyleConstants.setForeground(attr, Color.BLACK);
-        UI.writeStatusMessage("List of src and dst folders completed. Checking for differences...", attr);
-
+        StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
+        UI.writeStatusMessage("List of src and dst folders completed.", attr);
+        
+        // The delete-orphaned algorithm
+        if (optionDeleteOrphanedMusic) {
+            UI.writeStatusMessage("Locating orphaned music...", attr);
+            String folderSrcPath = folderSrc.getAbsolutePath();
+            lookAndDeleteOrphanedMusicInDst(listOfDst, folderSrcPath);
+        }
+        UI.writeStatusMessage("Checking for differences...", attr);
         // The file-search algorithm
         // TODO Explain the extra index
         int lastSessionIndex = 0;
         for (int i = 0; i < listOfSrc.length; i++) {
-            final File fileEntry = listOfSrc[i];
+            final File fileEntrySrc = listOfSrc[i];
             boolean isCurrentSessionUpdated = false;
 
-            if (optionSearchInSubdirectories && fileEntry.isDirectory()) {
+            if (optionSearchInSubdirectories && fileEntrySrc.isDirectory()) {
                 // If a folder was found, and the user wants it, then search it.
                 // TODO Will not be tested with the current directory
                 System.out.println("Recursing through folder; THIS SHOULD NOT HAPPEN (FOR NOW)");
-                listFilesOfFolder(fileEntry, folderDst);
+                listFilesOfFolder(fileEntrySrc, folderDst);
             } else {
                 // Get file name and extension, if any.
-                final String strFile = fileEntry.getName();
+                final String strFile = fileEntrySrc.getName();
                 final int fileExtIndex = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
                 final String strExt = strFile.substring(fileExtIndex + 1);
-                final long fileLastMod = fileEntry.lastModified();
+                final long fileLastMod = fileEntrySrc.lastModified();
                 // Try to locate the file in the previous session instead of checking all the metadata.
                 if (lastSessionIndex < lastSession.size()) {
-                    System.out.println("The previous session is still ready to go!");
                     final boolean isSameFile = lastSession.get(lastSessionIndex).getArg1().equals(strFile);
                     boolean hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileLastMod;
                     // We assume that, for the most part, most music is unchanged from last session.
@@ -152,7 +160,10 @@ public class MusicSyncer {
                         hasBeenModified = locateFileWrapper.getArg2() != fileLastMod;
                         updateCurrentSession(currentSession, strFile, fileLastMod);
                         lastSessionIndex++;
-                        if (wasFileLocated && !hasBeenModified) {
+                        // Check if the music exists in dst.
+                        File fileOnDst = new File(folderDst.getAbsolutePath() + "\\" + strFile);
+                        System.out.println("Trying to find " + strFile + ". Could I? " + wasFileLocated);
+                        if (wasFileLocated && fileOnDst.exists() && !hasBeenModified) {
                             continue;
                         }
                     } else {
@@ -162,9 +173,6 @@ public class MusicSyncer {
                         File fileOnDst = new File(folderDst.getAbsolutePath() + "\\" + strFile);
                         if (!hasBeenModified && fileOnDst.exists()) {
                             continue;
-                        }
-                        else if (!fileOnDst.exists()) {
-                            System.out.println("The file " + strFile + " does NOT exist in dst.");
                         }
                     }
                     isCurrentSessionUpdated = true;
@@ -178,7 +186,8 @@ public class MusicSyncer {
                     if (!isCurrentSessionUpdated) {
                         updateCurrentSession(currentSession, strFile, fileLastMod);
                     }
-                    sortedListOfSrc.add(fileEntry);
+                    System.out.println("ADDING " + fileEntrySrc.getName() + " TO LISTY");
+                    sortedListOfSrc.add(fileEntrySrc);
                     lastSessionIndex++;
                     break;
                 default:
@@ -187,7 +196,7 @@ public class MusicSyncer {
                 // Copy new music to dst if the option was checked.
                 // TODO This should be the last operation in the whole program because it adds unnecessary comparisons (at minimum n-checks!).
                 if (optionAddNewMusic) {
-                    checkAndAddNewMusicToDst(fileEntry, folderSrc, folderDst);
+                    checkAndAddNewMusicToDst(fileEntrySrc, folderSrc, folderDst);
                 }
                 continue;
             }
@@ -198,61 +207,27 @@ public class MusicSyncer {
         } catch (IOException e) {
             System.err.println("ERROR: Could not save a list of the music to a .txt file!");
         }
-        
-        StyleConstants.setForeground(attr, Color.BLACK);
+        StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
         UI.writeStatusMessage("Done searching through the src folder. Checking for differences...", attr);
         
-        for (final File fileEntryDst : listOfDst) {
-            final String strFile = fileEntryDst.getName();
+        for (final File fileEntrySorted : sortedListOfSrc) {
+            final String strFile = fileEntrySorted.getName();
             final int index = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
             final String strExt = strFile.substring(index + 1);
-            boolean isTheMusicOrphaned = true;
-            boolean isItMusic = true;
-            
+
             try {
                 switch (strExt.toUpperCase()) {
                 case "MP3":
-                    // Only start comparing metadata if both dir have the file.
-                    // TODO This is ugly and slow as fuck
-                    for (final File fileEntrySrc : sortedListOfSrc) {
-                        if (!(fileEntrySrc.getName().equals(fileEntryDst.getName()))) { // Do nothing because file was not found.
-                            continue;
-                        }
-                        isTheMusicOrphaned = false;
-                        // TODO DELETE THIS CHECK WHEN THE LASTMODIFIED TXT WORKS.
-                        if (fileEntrySrc.lastModified() >= fileEntryDst.lastModified()) {
-                            // Only update metadata if the user updated the src file.
-                            updateMP3MetaData(fileEntrySrc, fileEntryDst);
-                        }
-                        break;
-                    }
+                    File mp3InDst = new File(folderDst.getAbsolutePath() + "\\" + fileEntrySorted.getName());
+                    updateMP3MetaData(fileEntrySorted, mp3InDst);
                     break;
                 case "M4A":
                     // M4A are structurally the same as MP4 files.
-                    for (final File fileEntrySrc : sortedListOfSrc) {
-                        if (!(fileEntrySrc.getName().equals(fileEntryDst.getName()))) { // Do nothing because file was not found.
-                            continue;
-                        }
-                        isTheMusicOrphaned = false;
-                        if (fileEntrySrc.lastModified() >= fileEntryDst.lastModified()) {
-                            updateM4AMetaData(fileEntrySrc, fileEntryDst);
-                        }
-                        break;
-                    }
+                    File m4aInDst = new File(folderDst.getAbsolutePath() + "\\" + fileEntrySorted.getName());
+                    updateM4AMetaData(fileEntrySorted, m4aInDst);
                     break;
                 default:
-                    isItMusic = false;
-                    break;
-                }
-                // Delete orphaned music in dst if the option was checked.
-                if (optionDeleteOrphanedMusic && isItMusic && isTheMusicOrphaned) {
-                    if (tryToDeleteOrphanedMusicInDst(fileEntryDst)) {
-                        StyleConstants.setForeground(attr, Color.ORANGE);
-                        UI.writeStatusMessage("Deleted " + fileEntryDst.getName(), attr);
-                    } else {
-                        StyleConstants.setForeground(attr, Color.RED);
-                        UI.writeStatusMessage("Could not delete " + fileEntryDst.getName() + ".", attr);
-                    }
+                    break; // This was not music
                 }
             } catch (InvalidAudioFrameException | CannotReadException
                     | IOException | TagException
@@ -274,6 +249,7 @@ public class MusicSyncer {
         boolean wasFileLocated = false;
         do {
             int currentFileComparedToPreviousVersion = lastSession.get(lastSessionIndex).getArg1().compareTo(strFile);
+            // System.out.println("Comparing " + strFile + " with " + lastSession.get(lastSessionIndex).getArg1() + ". Value: " + currentFileComparedToPreviousVersion + ".\nIndex is " + lastSessionIndex);
             if (currentFileComparedToPreviousVersion < 0) {
                 // We are too low behind in our session list.
                 if (isFollowingCurrentFile) {
@@ -350,7 +326,7 @@ public class MusicSyncer {
             keyTagFile = listOfTagsDst.get(i);
             if (!listOfTagsSrc.get(i).getArg2().equals(keyTagFile.getArg2())) {
                 // Update metadata of the target music file.
-                System.out.println("Replacing tag " + listOfTagsDst.get(i).getArg2() + " with " + listOfTagsSrc.get(i).getArg2() + " with field " + keyTagFile.getArg1());
+                // System.out.println("Replacing tag " + listOfTagsDst.get(i).getArg2() + " with " + listOfTagsSrc.get(i).getArg2() + " with field " + keyTagFile.getArg1());
                 v2TagDst.setField(keyTagFile.getArg1(), listOfTagsSrc.get(i).getArg2());
                 mp3FileDst.setTag(v2TagDst);
                 mp3FileDst.commit();
@@ -405,18 +381,40 @@ public class MusicSyncer {
                         .resolve(folderSrc.toPath()
                                 .relativize(fileEntry.toPath()));
                 Files.copy(fileEntry.toPath(), targetPath);
-                StyleConstants.setForeground(attr, Color.GREEN);
+                StyleConstants.setForeground(attr, DataClass.NEW_MUSIC_COLOR);
                 UI.writeStatusMessage("Added " + fileEntry.getName() + ".", attr);
             } catch (IOException e) {
-                StyleConstants.setForeground(attr, Color.RED);
+                StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
                 UI.writeStatusMessage("FATAL: Could not copy " + fileEntry.getName() + " to destination.", attr);
             }
         }
     }
     
-    private boolean tryToDeleteOrphanedMusicInDst(File fileEntryDst) {
-        // TODO Per the documentation, this can throw an IOException if the operation was unsuccessful. 
-        return fileEntryDst.delete();
+    /**
+     * Delete orphaned music in the specified folder if the option was checked.
+     * This should be the first operation of the program. Otherwise, it adds
+     * more comparisons and bugs out the sorted list.
+     * 
+     * @param listOfFolder
+     *            a list of files in the specified folder
+     * @param pathOfFolder
+     *            the path to the folder.
+     */
+    private void lookAndDeleteOrphanedMusicInDst(File[] listOfFolder, String pathOfFolder) {
+        // TODO Per the documentation, this can throw an IOException if the operation was unsuccessful.
+        for (final File fileEntryDst : listOfFolder) {
+            File fileOnSrc = new File(pathOfFolder + "\\" + fileEntryDst.getName());
+            if (fileOnSrc.exists()) {
+                continue;
+            }
+            if (fileEntryDst.delete()) {
+                StyleConstants.setForeground(attr, DataClass.DEL_MUSIC_COLOR);
+                UI.writeStatusMessage("Deleted " + fileEntryDst.getName(), attr);
+            } else {
+                StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
+                UI.writeStatusMessage("Could not delete " + fileEntryDst.getName() + ".", attr);
+            }
+        }
     }
     
     /**
@@ -456,7 +454,7 @@ public class MusicSyncer {
             }
         } catch (FileNotFoundException e) {
             SimpleAttributeSet attr = new SimpleAttributeSet();
-            StyleConstants.setForeground(attr, Color.BLUE);
+            StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
             UI.writeStatusMessage("No last sync session was found.", attr);
         } catch (IOException e) {
             System.err.println("Error when loading last sync session: " + e.getMessage());
