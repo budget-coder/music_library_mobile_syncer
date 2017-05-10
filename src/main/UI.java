@@ -51,8 +51,8 @@ public class UI extends JFrame {
     private static Semaphore readProgressSemaphore;
     private static int progressBarValue;
     private MusicSyncer musicSyncer;
-    private Thread musicSyncerThread;
     private DirectoryChooser dirChooser;
+    private static JProgressBar progressBar;
     private final String srcFolderAttr;
     private final int srcFolderIndex;
     private final String dstFolderAttr;
@@ -75,6 +75,7 @@ public class UI extends JFrame {
                     frame.setVisible(true);
                 } catch (Exception e) {
                     System.out.println("FATAL: " + e.getMessage());
+                    e.printStackTrace();
                 }
             }
         });
@@ -206,16 +207,19 @@ public class UI extends JFrame {
         
         JPanel bottomPanel = new JPanel();
         getContentPane().add(bottomPanel, BorderLayout.SOUTH);
-        JProgressBar progressBar = new JProgressBar();
+        progressBar = new JProgressBar();
         progressBar.setStringPainted(true);
-        bottomPanel.add(progressBar);
         JButton startButton = new JButton("Start!");
         startButton.addActionListener(new ActionListener() {
+            private Thread musicSyncerThread;
+            private Thread progressBarThread;
+
             public void actionPerformed(ActionEvent arg0) {
                 // Stop execution if the button was pressed while it was running.
                 // TODO Actually add places where interrupts in MusicSyncer.
                 if (startButton.getText().equals("Stop!")) {
                     musicSyncerThread.interrupt();
+                    progressBar.setValue(0);
                 } else {
                     // Adding stopwatch for easier visualization of algorithm effectiveness.
                     long timeStart = System.currentTimeMillis();
@@ -227,6 +231,7 @@ public class UI extends JFrame {
                     // It does not make sense to be able to change the dirs.
                     srcBrowseButton.setEnabled(false);
                     dstBrowseButton.setEnabled(false);
+                    // Start the progress bar.
                     startProgressBarThread();
                     /*
                      * When the start button is pressed, we make a thread of the
@@ -267,22 +272,27 @@ public class UI extends JFrame {
             }
 
             private void startProgressBarThread() {
-                EventQueue.invokeLater(new Runnable() {
+                Runnable progressBarRunnable = new Runnable() {
                     @Override
                     public void run() {
-                        while (progressBarValue < 100) {
+                        while (progressBarValue < progressBar.getMaximum()) {
                             try {
                                 System.out.println("ProgressBar: Waiting for an update...");
                                 readProgressSemaphore.acquire();
                             } catch (InterruptedException ignore) {}
+                            System.out.println("ProgressBar: Max: " + progressBar.getMaximum());
                             System.out.println("ProgressBar: Got an update! Updating...");
                             progressBar.setValue(progressBarValue);
+                            System.out.println("ProgressBar: The value is currently " + progressBar.getValue());
                         }
                     }
-                });
+                };
+                progressBarThread = new Thread(progressBarRunnable);
+                progressBarThread.start();
             }
         });
         bottomPanel.add(startButton);
+        bottomPanel.add(progressBar);
         
         // Save settings before exiting the application.
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
@@ -315,6 +325,10 @@ public class UI extends JFrame {
     public static void updateProgressBar(int increment) {
         readProgressSemaphore.release();
         progressBarValue += increment;
+    }
+    
+    public static void setMaximumLimitOnProgressBar(int max) {
+        progressBar.setMaximum(max);
     }
     
     private String[] tryToLoadPreviousSettings() {
