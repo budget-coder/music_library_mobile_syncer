@@ -116,6 +116,9 @@ public class MusicSyncer {
         int lastSessionIndex = 0;
         // The algorithm
         for (int i = 0; i < listOfSrc.length; i++) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
             final File fileEntrySrc = listOfSrc[i];
             if (optionSearchInSubdirectories && fileEntrySrc.isDirectory()) {
                 // If a folder was found, and the user wants it, then search it.
@@ -210,6 +213,9 @@ public class MusicSyncer {
         UI.writeStatusMessage("Updating metadata...", attr);
         
         for (final File fileEntrySorted : sortedListOfSrc) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
             final String strFile = fileEntrySorted.getName();
             final int index = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
             final String strExt = strFile.substring(index + 1);
@@ -244,6 +250,9 @@ public class MusicSyncer {
      */
     private void addNewMusic(File currentSrcFolder, List<File> listOfNewMusic) throws InterruptedException {
         for (final File newMusic : listOfNewMusic) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
             addNewMusicToDst(newMusic, currentSrcFolder, dstFolder);
             UI.updateProgressBar(2);
         }
@@ -427,9 +436,13 @@ public class MusicSyncer {
      *            a list of files in the specified folder
      * @param pathOfFolder
      *            the path to the folder.
+     * @throws InterruptedException 
      */
-    private void lookAndDeleteOrphanedMusicInDst(File[] listOfFolder, String pathOfFolder) {
+    private void lookAndDeleteOrphanedMusicInDst(File[] listOfFolder, String pathOfFolder) throws InterruptedException {
         for (final File fileEntryDst : listOfFolder) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
             File fileOnSrc = new File(pathOfFolder + "\\" + fileEntryDst.getName());
             if (fileOnSrc.exists()) {
                 continue;
@@ -437,6 +450,7 @@ public class MusicSyncer {
             if (fileEntryDst.delete()) {
                 StyleConstants.setForeground(attr, DataClass.DEL_MUSIC_COLOR);
                 UI.writeStatusMessage("Deleted " + fileEntryDst.getName(), attr);
+                UI.updateProgressBar(1);
             } else {
                 StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
                 UI.writeStatusMessage("Could not delete " + fileEntryDst.getName() + ".", attr);
@@ -453,8 +467,9 @@ public class MusicSyncer {
      * the lines of a queue which amasses a list of music to be modified.
      * 
      * @return a list containing the previous session
+     * @throws InterruptedException 
      */
-    private List<DoubleWrapper<String, Long>> tryToLoadPreviousSession() {
+    private List<DoubleWrapper<String, Long>> tryToLoadPreviousSession() throws InterruptedException {
         File lastSession = new File("MLMS_LastSession.txt");
         // If the file does not exist, then create it for the future syncing.
         if (!lastSession.exists()) {
@@ -473,6 +488,9 @@ public class MusicSyncer {
             // Syntax: name of file on the first line and its last modified date on the next line.
             String line = br.readLine();
             while (line != null) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedException();
+                }
                 String name = line;
                 line = br.readLine();
                 // To avoid NumberFormatException on empty lines.
