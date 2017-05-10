@@ -26,12 +26,10 @@ import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
 import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
 import org.jaudiotagger.audio.mp3.MP3File;
 import org.jaudiotagger.tag.FieldKey;
+import org.jaudiotagger.tag.Tag;
 import org.jaudiotagger.tag.TagException;
-import org.jaudiotagger.tag.id3.AbstractID3v2Tag;
 import org.jaudiotagger.tag.id3.ID3v23Frames;
-import org.jaudiotagger.tag.id3.ID3v24Frames;
 import org.jaudiotagger.tag.images.Artwork;
-import org.jaudiotagger.tag.mp4.Mp4Tag;
 
 import data.DataClass;
 import data.DoubleWrapper;
@@ -48,11 +46,7 @@ public class MusicSyncer {
      * likelihood of the programmer forgetting to check for a key. This list
      * will NOT be able to be modified after creation as this will add bugs.
      */
-    private final List<String> listOfMP3Keys;
-    /**
-     * {@link #listOfMP3Keys}
-     */
-    private final List<FieldKey> listOfMP4Keys;
+    private final List<FieldKey> listOfFieldKeys;
     
     public MusicSyncer(String strSrcFolder, String strDstFolder) {
         srcFolder = new File(strSrcFolder.replace('\\', '/'));
@@ -63,19 +57,7 @@ public class MusicSyncer {
         optionSearchInSubdirectories = false;
         
         attr = new SimpleAttributeSet();
-        /*
-         * TODO The documentation is shite; unless there is a method for
-         * determining which ID3 tag is used, then use the ID3vxxFrames class
-         * that you have the, ugh, most of. For instance, most of my music is
-         * ID3v23.
-         */
-        listOfMP3Keys = Collections.unmodifiableList(Arrays.asList(
-                ID3v23Frames.FRAME_ID_V3_TITLE, ID3v24Frames.FRAME_ID_ARTIST,
-                ID3v23Frames.FRAME_ID_V3_ACCOMPANIMENT,
-                ID3v23Frames.FRAME_ID_V3_ALBUM, ID3v23Frames.FRAME_ID_V3_TYER,
-                ID3v23Frames.FRAME_ID_V3_TRACK, ID3v23Frames.FRAME_ID_V3_SET,
-                ID3v23Frames.FRAME_ID_V3_GENRE, ID3v23Frames.FRAME_ID_V3_COMPOSER));
-        listOfMP4Keys = Collections.unmodifiableList(Arrays.asList(
+        listOfFieldKeys = Collections.unmodifiableList(Arrays.asList(
                 FieldKey.TITLE, FieldKey.ARTIST,
                 FieldKey.ALBUM_ARTIST,
                 FieldKey.ALBUM, FieldKey.YEAR,
@@ -218,19 +200,19 @@ public class MusicSyncer {
                 switch (strExt.toUpperCase()) {
                 case "MP3":
                     File mp3InDst = new File(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
-                    updateMP3MetaData(fileEntrySorted, mp3InDst, listOfNewMusic);
+                    updateMusicMetaData(fileEntrySorted, mp3InDst, listOfNewMusic, true);
                     break;
                 case "M4A":
                     // M4A are structurally the same as MP4 files.
                     File m4aInDst = new File(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
-                    updateM4AMetaData(fileEntrySorted, m4aInDst, listOfNewMusic);
+                    updateMusicMetaData(fileEntrySorted, m4aInDst, listOfNewMusic, false);
                     break;
                 default:
                     break; // This was not music
                 }
             } catch (InvalidAudioFrameException | CannotReadException
-                    | IOException | TagException
-                    | ReadOnlyFileException | CannotWriteException e) {
+                    | IOException | TagException | ReadOnlyFileException
+                    | CannotWriteException | ClassCastException e) {
                 // TODO Use a logger just like in hotciv/cave
                 System.err.println("FATAL: " + e.toString());
             }
@@ -290,57 +272,74 @@ public class MusicSyncer {
         }
         return new DoubleWrapper<Boolean, Long>(wasFileLocated, 0L);
     }
-
+    
     /**
-     * For optimization, this method should only be called when the MP3 file has
-     * been modified!
      * 
      * @param fileSrc
      * @param fileDst
      * @param listOfNewMusic
+     * @param isMP3
      * @throws CannotReadException
      * @throws IOException
      * @throws TagException
      * @throws ReadOnlyFileException
      * @throws InvalidAudioFrameException
      * @throws CannotWriteException
+     * @throws ClassCastException
      */
-    private void updateMP3MetaData(File fileSrc, File fileDst, List<File> listOfNewMusic)
+    private <MusicTag extends Tag> void updateMusicMetaData(File fileSrc,
+            File fileDst, List<File> listOfNewMusic, boolean isMP3)
             throws CannotReadException, IOException, TagException,
-            ReadOnlyFileException, InvalidAudioFrameException, CannotWriteException {
+            ReadOnlyFileException, InvalidAudioFrameException,
+            CannotWriteException, ClassCastException {
         // Here we need to make a wrapper class because we need the tag field
         // when updating music.
-        List<DoubleWrapper<String, String>> listOfTagsSrc = new ArrayList<>();
+        List<DoubleWrapper<FieldKey, String>> listOfTagsSrc = new ArrayList<>();
         List<DoubleWrapper<FieldKey, String>> listOfTagsDst = new ArrayList<>();
         // Read metadata from the files.
-        AbstractID3v2Tag v2TagSrc = ((MP3File) AudioFileIO.read(fileSrc)).getID3v2Tag();
-        MP3File mp3FileDst = (MP3File) AudioFileIO.read(fileDst);
-        AbstractID3v2Tag v2TagDst = mp3FileDst.getID3v2Tag();
-        
+        MusicTag musicTagSrc;
+        AudioFile musicDstWriter;
+        MusicTag musicTagDst;
+        if (isMP3) {
+            musicTagSrc = (MusicTag) ((MP3File) AudioFileIO.read(fileSrc)).getID3v2Tag();
+            musicDstWriter = AudioFileIO.read(fileDst);
+            musicTagDst = (MusicTag) ((MP3File) musicDstWriter).getID3v2Tag();
+        } else {
+            musicTagSrc = (MusicTag) AudioFileIO.read(fileSrc).getTag();
+            musicDstWriter = AudioFileIO.read(fileDst);
+            musicTagDst = (MusicTag) musicDstWriter.getTag();
+            System.out.println("THE ARTISTO IS " + musicTagDst.getFirst(FieldKey.ARTIST));
+        }
         // Get each relevant tag from src and dst version of the file and save
         // them in lists for later comparisons.
-        for (int i = 0; i < listOfMP3Keys.size(); i++) {
-            String key = listOfMP3Keys.get(i);
-            FieldKey fieldKey = listOfMP4Keys.get(i); // TODO This is dangerous
-                                                      // as it assumes that both
-                                                      // lists are in the same
-                                                      // order. Okay, this is
-                                                      // really dangerous.
-            listOfTagsSrc.add(new DoubleWrapper<>(key, v2TagSrc.getFirst(key)));
-            //System.out.println("THE KEY IS " + v2TagDst.getValue(fieldKey, 0));
-            // TODO For some reason, it fucks up on the genre (for instance, (24) = soundtrack...)
-            // TODO It does not seem to be able to handle YEARs with less than 4 digits well.
-            listOfTagsDst.add(new DoubleWrapper<>(fieldKey, v2TagDst.getFirst(key)));
+        final ID3v23Frames id3v23Frame = ID3v23Frames.getInstanceOf();
+        for (FieldKey fieldKey : listOfFieldKeys) {
+            // TODO Ugh, duplication. Can this be done any smarter?
+            if (isMP3) {
+                /*
+                 * getFirst(FieldKey key) does NOT give the right year; it
+                 * should be "TYER" and not "TDRC". We get "TYER" by getting it
+                 * from the frame ID3v23Frames.FRAME_ID_V3_TYER and this is done
+                 * as follows.
+                 */
+                String fieldName = id3v23Frame.getId3KeyFromGenericKey(fieldKey).getFieldName();
+                listOfTagsSrc.add(new DoubleWrapper<>(fieldKey, musicTagSrc.getFirst(fieldName)));
+                listOfTagsDst.add(new DoubleWrapper<>(fieldKey, musicTagDst.getFirst(fieldName)));
+            } else {
+                listOfTagsSrc.add(new DoubleWrapper<>(fieldKey, musicTagSrc.getFirst(fieldKey)));
+                listOfTagsDst.add(new DoubleWrapper<>(fieldKey, musicTagDst.getFirst(fieldKey)));
+            }
         }
         // Now for the comparisons.
         DoubleWrapper<FieldKey, String> keyTagFile;
         boolean didIDetectAChange = false;
         for (int i = 0; i < listOfTagsSrc.size(); i++) {
             keyTagFile = listOfTagsDst.get(i);
+            System.out.println("Comparing " + listOfTagsSrc.get(i).getArg2() + " with " + keyTagFile.getArg2());
             if (!listOfTagsSrc.get(i).getArg2().equals(keyTagFile.getArg2())) {
+                System.out.println("Detected change. Saving");
                 // Update metadata of the target music file (but do not write it yet!).
-                // System.out.println("Replacing tag " + listOfTagsDst.get(i).getArg2() + " with " + listOfTagsSrc.get(i).getArg2() + " with field " + keyTagFile.getArg1());
-                v2TagDst.setField(keyTagFile.getArg1(), listOfTagsSrc.get(i).getArg2());
+                musicTagDst.setField(keyTagFile.getArg1(), listOfTagsSrc.get(i).getArg2());
                 didIDetectAChange = true;
             }
         }
@@ -349,32 +348,22 @@ public class MusicSyncer {
          * interested in the first artwork as the others are assumed to be
          * mistakes since they are not shown when the music is played.
          */
-        
-        Artwork srcArtwork = v2TagSrc.getFirstArtwork();
-        Artwork dstArtwork = v2TagDst.getFirstArtwork();
+        Artwork srcArtwork = musicTagSrc.getFirstArtwork();
+        Artwork dstArtwork = musicTagDst.getFirstArtwork();
         if (srcArtwork != null && dstArtwork == null) {
-            v2TagDst.setField(srcArtwork);
+            musicTagDst.setField(srcArtwork);
             didIDetectAChange = true;
         } else if (srcArtwork == null && dstArtwork != null) {
-            v2TagDst.deleteArtworkField();
+            musicTagDst.deleteArtworkField();
             didIDetectAChange = true;
-        } else {
-            /*
-            BufferedImage srcArtworkImg = (BufferedImage) srcArtwork.getImage();
-            BufferedImage dstArtworkImg = (BufferedImage) dstArtwork.getImage();
-            if (compareImages(srcArtworkImg, dstArtworkImg)) {
-                System.out.println("Detected artwork change. Updating");
-                // v2TagDst.setField(srcArtwork);
-                didIDetectAChange = true;
-            }
-            */
+        } else if (srcArtwork != null && dstArtwork != null) {
             // Only get the first artwork.
             byte[] srcArtworkArr = srcArtwork.getBinaryData();
             byte[] dstArtworkArr = dstArtwork.getBinaryData();
             if (!Arrays.equals(srcArtworkArr, dstArtworkArr)) {
                 System.out.println("Detected artwork change. Updating");
-                v2TagDst.deleteArtworkField();
-                v2TagDst.setField(srcArtwork);
+                musicTagDst.deleteArtworkField();
+                musicTagDst.setField(srcArtwork);
                 didIDetectAChange = true;
             }
         }
@@ -389,42 +378,8 @@ public class MusicSyncer {
             listOfNewMusic.add(fileSrc);
         } else {
             // Write the metadata once and for all.
-            mp3FileDst.setTag(v2TagDst);
-            mp3FileDst.commit();
-        }
-    }
-    
-    // TODO This feels a lot like duplicate code but how should it be improved?
-    private void updateM4AMetaData(File fileSrc, File fileDst, List<File> listOfNewMusic)
-            throws CannotReadException, IOException, TagException,
-            ReadOnlyFileException, InvalidAudioFrameException, CannotWriteException {
-        List<DoubleWrapper<FieldKey, String>> listOfTagsSrc = new ArrayList<>();
-        List<DoubleWrapper<FieldKey, String>> listOfTagsDst = new ArrayList<>();
-        // Read metadata from the files.
-        Mp4Tag mp4FileSrc = (Mp4Tag) AudioFileIO.read(fileSrc).getTag();
-        AudioFile mp4AudioFileDst = AudioFileIO.read(fileDst);
-        Mp4Tag mp4FileDst = (Mp4Tag) mp4AudioFileDst.getTag();
-        
-        // Get each relevant tag from src and dst version of the file and save
-        // them in lists for later comparisons.
-        for (FieldKey key : listOfMP4Keys) {
-            listOfTagsSrc.add(new DoubleWrapper<>(key, mp4FileSrc.getFirst(key)));
-            listOfTagsDst.add(new DoubleWrapper<>(key, mp4FileDst.getFirst(key)));
-        }
-        // Now for the comparisons.
-        DoubleWrapper<FieldKey, String> keyTagFile;
-        boolean didIDetectAChange = false;
-        for (int i = 0; i < listOfTagsSrc.size(); i++) {
-            keyTagFile = listOfTagsDst.get(i);
-            if (!listOfTagsSrc.get(i).getArg2().equals(keyTagFile.getArg2())) {
-                // Update metadata of the target music file.
-                mp4FileDst.setField(keyTagFile.getArg1(), listOfTagsSrc.get(i).getArg2());
-                mp4AudioFileDst.commit();
-                didIDetectAChange = true;
-            }
-        }
-        if (!didIDetectAChange) {
-            listOfNewMusic.add(fileSrc);
+            musicDstWriter.setTag(musicTagDst);
+            musicDstWriter.commit();
         }
     }
     
