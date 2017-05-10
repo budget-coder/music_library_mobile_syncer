@@ -277,13 +277,9 @@ public class UI extends JFrame {
                     public void run() {
                         while (progressBarValue < progressBar.getMaximum()) {
                             try {
-                                System.out.println("ProgressBar: Waiting for an update...");
                                 readProgressSemaphore.acquire();
                             } catch (InterruptedException ignore) {}
-                            System.out.println("ProgressBar: Max: " + progressBar.getMaximum());
-                            System.out.println("ProgressBar: Got an update! Updating...");
                             progressBar.setValue(progressBarValue);
-                            System.out.println("ProgressBar: The value is currently " + progressBar.getValue());
                         }
                     }
                 };

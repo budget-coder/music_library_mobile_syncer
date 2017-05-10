@@ -71,11 +71,8 @@ public class MusicSyncer {
      */
     public void initiate() throws InterruptedException {
         if (srcFolder.isDirectory() && dstFolder.isDirectory()) {
-            System.out.println("First step");
             DoubleWrapper<List<File>, List<File>> tuppleModifiedNewMusic = buildMusicListToSyncAndDeleteOldFiles(srcFolder);
-            System.out.println("Second step");
             updateMetaData(srcFolder, tuppleModifiedNewMusic.getArg1(), tuppleModifiedNewMusic.getArg2());
-            System.out.println("Third step");
             addNewMusic(srcFolder, tuppleModifiedNewMusic.getArg2());
         } else {
             StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
@@ -226,7 +223,6 @@ public class MusicSyncer {
                     isMP3 = false;
                     File mpXInDst = new File(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
                     updateMusicMetaData(fileEntrySorted, mpXInDst, listOfNewMusic, isMP3);
-                    UI.updateProgressBar(2);
                     break;
                 default:
                     break; // This was not music
@@ -240,6 +236,12 @@ public class MusicSyncer {
         }
     }
     
+    /**
+     * 
+     * @param currentSrcFolder
+     * @param listOfNewMusic
+     * @throws InterruptedException
+     */
     private void addNewMusic(File currentSrcFolder, List<File> listOfNewMusic) throws InterruptedException {
         for (final File newMusic : listOfNewMusic) {
             addNewMusicToDst(newMusic, currentSrcFolder, dstFolder);
@@ -398,6 +400,7 @@ public class MusicSyncer {
             // Write the metadata once and for all.
             musicDstWriter.setTag(musicTagDst);
             musicDstWriter.commit();
+            UI.updateProgressBar(2);
         }
     }
     
