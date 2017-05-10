@@ -12,5 +12,5 @@ Tag mappings: https://picard.musicbrainz.org/docs/mappings/ <br/>
 - Add tests and actually have code coverage.
 - Make it possible to auto-detect Android device.
 - Add javadoc to all methods...
-- Add interrupt checking.
+- ~~Add interrupt checking~~.
 - Make it work for nested folders
