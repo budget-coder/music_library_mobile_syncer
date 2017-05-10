@@ -71,8 +71,11 @@ public class MusicSyncer {
      */
     public void initiate() throws InterruptedException {
         if (srcFolder.isDirectory() && dstFolder.isDirectory()) {
+            System.out.println("First step");
             DoubleWrapper<List<File>, List<File>> tuppleModifiedNewMusic = buildMusicListToSyncAndDeleteOldFiles(srcFolder);
+            System.out.println("Second step");
             updateMetaData(srcFolder, tuppleModifiedNewMusic.getArg1(), tuppleModifiedNewMusic.getArg2());
+            System.out.println("Third step");
             addNewMusic(srcFolder, tuppleModifiedNewMusic.getArg2());
         } else {
             StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
@@ -89,6 +92,8 @@ public class MusicSyncer {
     private DoubleWrapper<List<File>, List<File>> buildMusicListToSyncAndDeleteOldFiles(File currentSrcFolder) throws InterruptedException {
         final File[] listOfSrc = srcFolder.listFiles();
         final File[] listOfDst = dstFolder.listFiles();
+        // TODO This call here is useless when it comes to nested folders...
+        UI.setMaximumLimitOnProgressBar((listOfSrc.length + listOfDst.length));
         // A list with only the modified music.
         final List<File> sortedListOfSrc = new ArrayList<>();
         // A list with only the music to be added.
@@ -169,6 +174,7 @@ public class MusicSyncer {
                 // Check if the music exists in dst.
                 boolean doesFileInDstExist = new File(dstFolder.getAbsolutePath() + "\\" + strFile).exists();
                 if (wasFileLocated && !hasBeenModified) {
+                    UI.updateProgressBar(2);
                     continue;
                 } else if (optionAddNewMusic && !doesFileInDstExist) {
                     /*
@@ -220,6 +226,7 @@ public class MusicSyncer {
                     isMP3 = false;
                     File mpXInDst = new File(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
                     updateMusicMetaData(fileEntrySorted, mpXInDst, listOfNewMusic, isMP3);
+                    UI.updateProgressBar(2);
                     break;
                 default:
                     break; // This was not music
@@ -236,6 +243,7 @@ public class MusicSyncer {
     private void addNewMusic(File currentSrcFolder, List<File> listOfNewMusic) throws InterruptedException {
         for (final File newMusic : listOfNewMusic) {
             addNewMusicToDst(newMusic, currentSrcFolder, dstFolder);
+            UI.updateProgressBar(2);
         }
     }
 
