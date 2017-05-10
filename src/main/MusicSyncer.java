@@ -30,16 +30,15 @@ import org.jaudiotagger.tag.TagException;
 import org.jaudiotagger.tag.id3.AbstractID3v2Tag;
 import org.jaudiotagger.tag.id3.ID3v23Frames;
 import org.jaudiotagger.tag.id3.ID3v24Frames;
+import org.jaudiotagger.tag.images.Artwork;
 import org.jaudiotagger.tag.mp4.Mp4Tag;
 
 import data.DataClass;
 import data.DoubleWrapper;
 
 public class MusicSyncer {    
-    private String srcFolder;
-    private String dstFolder;
-    private File srcFolderFile;
-    private File dstFolderFile;
+    private final File srcFolder;
+    private final File dstFolder;
     private boolean optionAddNewMusic;
     private boolean optionDeleteOrphanedMusic;
     private boolean optionSearchInSubdirectories;
@@ -55,10 +54,9 @@ public class MusicSyncer {
      */
     private final List<FieldKey> listOfMP4Keys;
     
-    
-    public MusicSyncer(String srcFolder, String dstFolder) {
-        this.srcFolder = srcFolder;
-        this.dstFolder = dstFolder;
+    public MusicSyncer(String strSrcFolder, String strDstFolder) {
+        srcFolder = new File(strSrcFolder.replace('\\', '/'));
+        dstFolder = new File(strDstFolder.replace("\\", "/"));
         // Options are false by default.
         optionAddNewMusic = false;
         optionDeleteOrphanedMusic = false;
@@ -85,47 +83,43 @@ public class MusicSyncer {
                 FieldKey.GENRE, FieldKey.COMPOSER));
     }
     
+    /**
+     * 
+     * @throws InterruptedException
+     */
     public void initiate() throws InterruptedException {
-        srcFolderFile = new File(srcFolder.replace('\\', '/'));
-        dstFolderFile = new File(dstFolder.replace("\\", "/"));
-        if (srcFolderFile.isDirectory() && dstFolderFile.isDirectory()) {
-            listFilesOfFolder();
+        if (srcFolder.isDirectory() && dstFolder.isDirectory()) {
+            DoubleWrapper<List<File>, List<File>> tuppleModifiedNewMusic = buildMusicListToSyncAndDeleteOldFiles(srcFolder);
+            updateMetaData(srcFolder, tuppleModifiedNewMusic.getArg1(), tuppleModifiedNewMusic.getArg2());
+            addNewMusic(srcFolder, tuppleModifiedNewMusic.getArg2());
         } else {
             StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
             UI.writeStatusMessage("ERROR: The source/target folder is not a folder or does not exist.", attr);
         }
     }
-    
-    public void setAddNewMusicOption(boolean option) {
-        optionAddNewMusic = option;
-    }
-    
-    public void setDeleteOrphanedMusic(boolean option) {
-        optionDeleteOrphanedMusic = option;
-    }
-    
-    public void setSearchInSubdirectories(boolean option) {
-        optionSearchInSubdirectories = option;
-    }
 
-    private void listFilesOfFolder() {
+    /**
+     * 
+     * @param currentSrcFolder
+     * @return
+     */
+    private DoubleWrapper<List<File>, List<File>> buildMusicListToSyncAndDeleteOldFiles(File currentSrcFolder) throws InterruptedException {
         // Note that we want to locally scope variables as much as possible:
         // http://stackoverflow.com/questions/8803674/declaring-variables-inside-or-outside-of-a-loop/8878071#8878071
-        File[] listOfSrc = srcFolderFile.listFiles();
-        File[] listOfDst = dstFolderFile.listFiles();
+        final File[] listOfSrc = srcFolder.listFiles();
+        final File[] listOfDst = dstFolder.listFiles();
         // A list with only the modified music.
         List<File> sortedListOfSrc = new ArrayList<>();
         // A list with only the music to be added.
         List<File> listOfNewMusic = new ArrayList<>();
         StringBuilder currentSession = new StringBuilder();
         List<DoubleWrapper<String, Long>> lastSession = tryToLoadPreviousSession();
+        
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
         UI.writeStatusMessage("List of src and dst folders completed.", attr);
-        
-        // The delete-orphaned algorithm
         if (optionDeleteOrphanedMusic) {
             UI.writeStatusMessage("Locating orphaned music...", attr);
-            String folderSrcPath = srcFolderFile.getAbsolutePath();
+            String folderSrcPath = currentSrcFolder.getAbsolutePath();
             lookAndDeleteOrphanedMusicInDst(listOfDst, folderSrcPath);
         }
         UI.writeStatusMessage("Finding files in src which have been updated since last session...", attr);
@@ -139,10 +133,10 @@ public class MusicSyncer {
                 // TODO Will not be tested with the current directory
                 System.out.println("Recursing through folder; THIS SHOULD NOT HAPPEN (FOR NOW)");
                 // Take a backup of the current location, recurse the folder, and restore the original folder when done.
-                File srcFolderFileCopy = srcFolderFile;
-                srcFolderFile = fileEntrySrc;
-                listFilesOfFolder();
-                srcFolderFile = srcFolderFileCopy;
+                File currentSrcFolderCopy = currentSrcFolder;
+                currentSrcFolder = fileEntrySrc;
+                buildMusicListToSyncAndDeleteOldFiles(currentSrcFolder);
+                currentSrcFolder = currentSrcFolderCopy;
                 continue;
             }
             // Get file name and extension, if any.
@@ -182,7 +176,7 @@ public class MusicSyncer {
                     }
                 }
                 // Check if the music exists in dst.
-                boolean doesFileInDstExist = new File(dstFolderFile.getAbsolutePath() + "\\" + strFile).exists();
+                boolean doesFileInDstExist = new File(dstFolder.getAbsolutePath() + "\\" + strFile).exists();
                 if (wasFileLocated && !hasBeenModified) {
                     continue;
                 } else if (optionAddNewMusic && !doesFileInDstExist) {
@@ -208,6 +202,10 @@ public class MusicSyncer {
         } catch (IOException e) {
             System.err.println("ERROR: Could not save a list of the music to a .txt file!");
         }
+        return new DoubleWrapper<List<File>, List<File>>(sortedListOfSrc, listOfNewMusic);
+    }
+    
+    private void updateMetaData(File currentSrcFolder, List<File> sortedListOfSrc, List<File> listOfNewMusic) throws InterruptedException {
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
         UI.writeStatusMessage("Updating metadata...", attr);
         
@@ -219,12 +217,12 @@ public class MusicSyncer {
             try {
                 switch (strExt.toUpperCase()) {
                 case "MP3":
-                    File mp3InDst = new File(dstFolderFile.getAbsolutePath() + "\\" + fileEntrySorted.getName());
+                    File mp3InDst = new File(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
                     updateMP3MetaData(fileEntrySorted, mp3InDst, listOfNewMusic);
                     break;
                 case "M4A":
                     // M4A are structurally the same as MP4 files.
-                    File m4aInDst = new File(dstFolderFile.getAbsolutePath() + "\\" + fileEntrySorted.getName());
+                    File m4aInDst = new File(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
                     updateM4AMetaData(fileEntrySorted, m4aInDst, listOfNewMusic);
                     break;
                 default:
@@ -237,9 +235,11 @@ public class MusicSyncer {
                 System.err.println("FATAL: " + e.toString());
             }
         }
-        
+    }
+    
+    private void addNewMusic(File currentSrcFolder, List<File> listOfNewMusic) throws InterruptedException {
         for (final File newMusic : listOfNewMusic) {
-            addNewMusicToDst(newMusic, srcFolderFile, dstFolderFile);
+            addNewMusicToDst(newMusic, currentSrcFolder, dstFolder);
         }
     }
 
@@ -297,7 +297,7 @@ public class MusicSyncer {
      * 
      * @param fileSrc
      * @param fileDst
-     * @param listOfNewMusic TODO
+     * @param listOfNewMusic
      * @throws CannotReadException
      * @throws IOException
      * @throws TagException
@@ -338,16 +338,59 @@ public class MusicSyncer {
         for (int i = 0; i < listOfTagsSrc.size(); i++) {
             keyTagFile = listOfTagsDst.get(i);
             if (!listOfTagsSrc.get(i).getArg2().equals(keyTagFile.getArg2())) {
-                // Update metadata of the target music file.
+                // Update metadata of the target music file (but do not write it yet!).
                 // System.out.println("Replacing tag " + listOfTagsDst.get(i).getArg2() + " with " + listOfTagsSrc.get(i).getArg2() + " with field " + keyTagFile.getArg1());
                 v2TagDst.setField(keyTagFile.getArg1(), listOfTagsSrc.get(i).getArg2());
-                mp3FileDst.setTag(v2TagDst);
-                mp3FileDst.commit();
+                didIDetectAChange = true;
+            }
+        }
+        /*
+         * Artworks, however, are a special case. Notice that we are only
+         * interested in the first artwork as the others are assumed to be
+         * mistakes since they are not shown when the music is played.
+         */
+        
+        Artwork srcArtwork = v2TagSrc.getFirstArtwork();
+        Artwork dstArtwork = v2TagDst.getFirstArtwork();
+        if (srcArtwork != null && dstArtwork == null) {
+            v2TagDst.setField(srcArtwork);
+            didIDetectAChange = true;
+        } else if (srcArtwork == null && dstArtwork != null) {
+            v2TagDst.deleteArtworkField();
+            didIDetectAChange = true;
+        } else {
+            /*
+            BufferedImage srcArtworkImg = (BufferedImage) srcArtwork.getImage();
+            BufferedImage dstArtworkImg = (BufferedImage) dstArtwork.getImage();
+            if (compareImages(srcArtworkImg, dstArtworkImg)) {
+                System.out.println("Detected artwork change. Updating");
+                // v2TagDst.setField(srcArtwork);
+                didIDetectAChange = true;
+            }
+            */
+            // Only get the first artwork.
+            byte[] srcArtworkArr = srcArtwork.getBinaryData();
+            byte[] dstArtworkArr = dstArtwork.getBinaryData();
+            if (!Arrays.equals(srcArtworkArr, dstArtworkArr)) {
+                System.out.println("Detected artwork change. Updating");
+                v2TagDst.deleteArtworkField();
+                v2TagDst.setField(srcArtwork);
                 didIDetectAChange = true;
             }
         }
         if (!didIDetectAChange) {
+            /*
+             * No metadata change was detected. Our filter might not be
+             * comprehensive enough (most likely as this filter was made for
+             * myself). However, we would not end in this method if SOMETHING
+             * had not changed. So we will just replace the whole file on dst
+             * instead.
+             */
             listOfNewMusic.add(fileSrc);
+        } else {
+            // Write the metadata once and for all.
+            mp3FileDst.setTag(v2TagDst);
+            mp3FileDst.commit();
         }
     }
     
@@ -377,6 +420,7 @@ public class MusicSyncer {
                 // Update metadata of the target music file.
                 mp4FileDst.setField(keyTagFile.getArg1(), listOfTagsSrc.get(i).getArg2());
                 mp4AudioFileDst.commit();
+                didIDetectAChange = true;
             }
         }
         if (!didIDetectAChange) {
@@ -395,7 +439,6 @@ public class MusicSyncer {
         } catch (IOException e) {
             StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
             UI.writeStatusMessage("FATAL: Could not copy " + strFile + " to destination.", attr);
-            e.printStackTrace();
         } 
     }
     
@@ -483,5 +526,17 @@ public class MusicSyncer {
     private void updateCurrentSession(StringBuilder currentSession, String strFile, long fileLastMod) {
         currentSession.append(strFile + "\n");
         currentSession.append(fileLastMod + "\n");
+    }
+    
+    public void setAddNewMusicOption(boolean option) {
+        optionAddNewMusic = option;
+    }
+    
+    public void setDeleteOrphanedMusic(boolean option) {
+        optionDeleteOrphanedMusic = option;
+    }
+    
+    public void setSearchInSubdirectories(boolean option) {
+        optionSearchInSubdirectories = option;
     }
 }
