@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.Semaphore;
 
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -47,6 +48,8 @@ public class UI extends JFrame {
     private JTextField txtDstDir;
     private static JTextPane statusText;
     private static StyledDocument statusTextDoc;
+    private static Semaphore readProgressSemaphore;
+    private static int progressBarValue;
     private MusicSyncer musicSyncer;
     private Thread musicSyncerThread;
     private DirectoryChooser dirChooser;
@@ -81,6 +84,8 @@ public class UI extends JFrame {
      * Create the frame.
      */
     public UI() {
+        final boolean IS_FCFS = true;
+        readProgressSemaphore = new Semaphore(-1, IS_FCFS);
         // For reading the settings correctly
         srcFolderAttr = "srcFolder=";
         srcFolderIndex = 0;
@@ -201,7 +206,9 @@ public class UI extends JFrame {
         
         JPanel bottomPanel = new JPanel();
         getContentPane().add(bottomPanel, BorderLayout.SOUTH);
-        
+        JProgressBar progressBar = new JProgressBar();
+        progressBar.setStringPainted(true);
+        bottomPanel.add(progressBar);
         JButton startButton = new JButton("Start!");
         startButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent arg0) {
@@ -220,6 +227,7 @@ public class UI extends JFrame {
                     // It does not make sense to be able to change the dirs.
                     srcBrowseButton.setEnabled(false);
                     dstBrowseButton.setEnabled(false);
+                    startProgressBarThread();
                     /*
                      * When the start button is pressed, we make a thread of the
                      * main program. The reasons are two-fold: 1) To ensure the
@@ -257,11 +265,25 @@ public class UI extends JFrame {
                     musicSyncerThread.start();
                 }
             }
+
+            private void startProgressBarThread() {
+                EventQueue.invokeLater(new Runnable() {
+                    @Override
+                    public void run() {
+                        while (progressBarValue < 100) {
+                            try {
+                                System.out.println("ProgressBar: Waiting for an update...");
+                                readProgressSemaphore.acquire();
+                            } catch (InterruptedException ignore) {}
+                            System.out.println("ProgressBar: Got an update! Updating...");
+                            progressBar.setValue(progressBarValue);
+                        }
+                    }
+                });
+            }
         });
         bottomPanel.add(startButton);
         
-        JProgressBar progressBar = new JProgressBar();
-        bottomPanel.add(progressBar);
         // Save settings before exiting the application.
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
@@ -281,6 +303,18 @@ public class UI extends JFrame {
                 }
             }
         }));
+    }
+    
+    /**
+     * Note that we do not want to make the MusicSyncer instance wait! Just
+     * release immediately and continue!
+     * 
+     * @param increment
+     *            the value to increment the progress bar's value by.
+     */
+    public static void updateProgressBar(int increment) {
+        readProgressSemaphore.release();
+        progressBarValue += increment;
     }
     
     private String[] tryToLoadPreviousSettings() {
