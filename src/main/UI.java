@@ -63,6 +63,14 @@ public class UI extends JFrame {
     private final int deleteOrphanedIndex;
     private final String searchInSubdirectoriesAttr;
     private final int searchInSubdirectoriesIndex;
+    private final String windowXAttr;
+    private int windowX = -1;
+    private final String windowYAttr;
+    private int windowY = -1;
+    private final String windowWidthAttr;
+    private int windowWidth = -1;
+    private final String windowHeightAttr;
+    private int windowHeight = -1;
 
     /**
      * Launch the application.
@@ -74,8 +82,7 @@ public class UI extends JFrame {
                     UI frame = new UI();
                     frame.setVisible(true);
                 } catch (Exception e) {
-                    System.out.println("FATAL: " + e.getMessage());
-                    e.printStackTrace();
+                    System.err.println("FATAL: " + e + ": " + e.getMessage());
                 }
             }
         });
@@ -86,6 +93,7 @@ public class UI extends JFrame {
      */
     public UI() {
         final boolean IS_FCFS = true;
+        // Load MLMS_Settings.txt if available.
         readProgressSemaphore = new Semaphore(-1, IS_FCFS);
         // For reading the settings correctly
         srcFolderAttr = "srcFolder=";
@@ -98,9 +106,19 @@ public class UI extends JFrame {
         deleteOrphanedIndex = 3;
         searchInSubdirectoriesAttr = "searchInSubdirectories=";
         searchInSubdirectoriesIndex = 4;
+        windowXAttr = "windowX=";
+        windowYAttr = "windowY=";
+        windowWidthAttr = "windowWidth=";
+        windowHeightAttr = "windowHeight=";
         setTitle("Music Library Mobile Syncer");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setBounds(100, 100, 450, 300);
+        String[] arrayOfSettings = tryToLoadPreviousSettings();
+        if (windowX > -1) {
+            setBounds(windowX, windowY, windowWidth, windowHeight);
+        } else {
+            // Default values
+            setBounds(100, 100, 450, 300);
+        }
         
         JPanel topPanel = new JPanel();
         getContentPane().add(topPanel, BorderLayout.NORTH);
@@ -122,8 +140,6 @@ public class UI extends JFrame {
         statusText.setText("Status window:\n");
         centerPanel.setViewportView(statusText);
         
-        // Load MLMS_Settings.txt if available.
-        String[] arrayOfSettings = tryToLoadPreviousSettings();
         txtSrcDir = new JTextField();
         dirPanel.add(txtSrcDir);
         txtDstDir = new JTextField();
@@ -216,10 +232,9 @@ public class UI extends JFrame {
 
             public void actionPerformed(ActionEvent arg0) {
                 // Stop execution if the button was pressed while it was running.
-                // TODO Actually add places where interrupts in MusicSyncer.
                 if (startButton.getText().equals("Stop!")) {
                     musicSyncerThread.interrupt();
-                    progressBar.setValue(0);
+                    progressBarThread.interrupt();
                 } else {
                     // Adding stopwatch for easier visualization of algorithm effectiveness.
                     long timeStart = System.currentTimeMillis();
@@ -231,7 +246,10 @@ public class UI extends JFrame {
                     // It does not make sense to be able to change the dirs.
                     srcBrowseButton.setEnabled(false);
                     dstBrowseButton.setEnabled(false);
-                    // Start the progress bar.
+                    // Start the progress bar. The if-clause is a safety measure in case MusicSyncer counted wrong.
+                    if (progressBarThread != null && progressBarThread.isAlive()) {
+                        progressBarThread.interrupt();
+                    }
                     startProgressBarThread();
                     /*
                      * When the start button is pressed, we make a thread of the
@@ -257,13 +275,14 @@ public class UI extends JFrame {
                                 writeStatusMessage("Execution was stopped.", attr);
                             } finally {
                                 // Restore everything to its default value.
-                                SimpleAttributeSet attr = new SimpleAttributeSet();
-                                StyleConstants.setForeground(attr, Color.BLUE);
-                                writeStatusMessage("Finished. Time taken: " + (System.currentTimeMillis() - timeStart) + " ms.", attr);
                                 startButton.setText("Start!");
                                 srcBrowseButton.setEnabled(true);
                                 dstBrowseButton.setEnabled(true);
                             }
+                            SimpleAttributeSet attr = new SimpleAttributeSet();
+                            StyleConstants.setForeground(attr, Color.BLUE);
+                            writeStatusMessage("Finished. Time taken: " + (System.currentTimeMillis() - timeStart) + " ms.", attr);
+                            progressBar.setValue(0);
                         }
                     };
                     musicSyncerThread = new Thread(musicSyncerRunnable);
@@ -302,7 +321,12 @@ public class UI extends JFrame {
                             + deleteOrphanedAttr
                             + deleteOrphanedCheckBox.isSelected() + "\n"
                             + searchInSubdirectoriesAttr
-                            + searchInSubdirectoriesCheckBox.isSelected());
+                            + searchInSubdirectoriesCheckBox.isSelected() + "\n"
+                            + windowXAttr + getX() + "\n"
+                            + windowYAttr + getY() + "\n"
+                            + windowWidthAttr + getWidth() + "\n"
+                            + windowHeightAttr + getHeight() + "\n"
+                            );
                     Files.write(Paths.get("MLMS_Settings.txt"), settings, Charset.forName("UTF-8"));
                 } catch (IOException e) {
                     System.err.println("ERROR: Could not save a list of the music to a .txt file!");
@@ -353,6 +377,14 @@ public class UI extends JFrame {
                         deleteOrphaned = line.substring(deleteOrphanedAttr.length());
                     } else if (line.startsWith(searchInSubdirectoriesAttr)) {
                         searchInSubdirectories = line.substring(searchInSubdirectoriesAttr.length());
+                    } else if (line.startsWith(windowXAttr)) {
+                        windowX = Integer.parseInt(line.substring(windowXAttr.length()));
+                    } else if (line.startsWith(windowYAttr)) {
+                        windowY = Integer.parseInt(line.substring(windowYAttr.length()));
+                    } else if (line.startsWith(windowWidthAttr)) {
+                        windowWidth = Integer.parseInt(line.substring(windowWidthAttr.length()));
+                    } else if (line.startsWith(windowHeightAttr)) {
+                        windowHeight = Integer.parseInt(line.substring(windowHeightAttr.length()));
                     }
                     line = br.readLine();
                 }
