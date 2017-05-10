@@ -250,6 +250,7 @@ public class UI extends JFrame {
                     if (progressBarThread != null && progressBarThread.isAlive()) {
                         progressBarThread.interrupt();
                     }
+                    progressBar.setValue(0);
                     startProgressBarThread();
                     /*
                      * When the start button is pressed, we make a thread of the
@@ -282,7 +283,6 @@ public class UI extends JFrame {
                             SimpleAttributeSet attr = new SimpleAttributeSet();
                             StyleConstants.setForeground(attr, Color.BLUE);
                             writeStatusMessage("Finished. Time taken: " + (System.currentTimeMillis() - timeStart) + " ms.", attr);
-                            progressBar.setValue(0);
                         }
                     };
                     musicSyncerThread = new Thread(musicSyncerRunnable);
