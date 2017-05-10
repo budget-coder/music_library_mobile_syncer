@@ -84,30 +84,35 @@ public class MusicSyncer {
      * 
      * @param currentSrcFolder
      * @return
+     * @throws InterruptedException
      */
     private DoubleWrapper<List<File>, List<File>> buildMusicListToSyncAndDeleteOldFiles(File currentSrcFolder) throws InterruptedException {
-        // Note that we want to locally scope variables as much as possible:
-        // http://stackoverflow.com/questions/8803674/declaring-variables-inside-or-outside-of-a-loop/8878071#8878071
         final File[] listOfSrc = srcFolder.listFiles();
         final File[] listOfDst = dstFolder.listFiles();
         // A list with only the modified music.
-        List<File> sortedListOfSrc = new ArrayList<>();
+        final List<File> sortedListOfSrc = new ArrayList<>();
         // A list with only the music to be added.
-        List<File> listOfNewMusic = new ArrayList<>();
-        StringBuilder currentSession = new StringBuilder();
-        List<DoubleWrapper<String, Long>> lastSession = tryToLoadPreviousSession();
+        final List<File> listOfNewMusic = new ArrayList<>();
+        final StringBuilder currentSession = new StringBuilder();
+        final List<DoubleWrapper<String, Long>> lastSession = tryToLoadPreviousSession();
         
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
         UI.writeStatusMessage("List of src and dst folders completed.", attr);
+        // Before we begin, we might want to check if there is any orphaned
+        // music that we can get rid of to avoid extra comparisons.
         if (optionDeleteOrphanedMusic) {
             UI.writeStatusMessage("Locating orphaned music...", attr);
             String folderSrcPath = currentSrcFolder.getAbsolutePath();
             lookAndDeleteOrphanedMusicInDst(listOfDst, folderSrcPath);
         }
         UI.writeStatusMessage("Finding files in src which have been updated since last session...", attr);
-        // The file-search algorithm
-        // TODO Explain the extra index
+        /*
+         * We use a separate index for the last session file because we cannot
+         * guarantee that the amount of music in the source folder equals the
+         * amount described in the file.
+         */
         int lastSessionIndex = 0;
+        // The algorithm
         for (int i = 0; i < listOfSrc.length; i++) {
             final File fileEntrySrc = listOfSrc[i];
             if (optionSearchInSubdirectories && fileEntrySrc.isDirectory()) {
@@ -141,9 +146,11 @@ public class MusicSyncer {
                     hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileLastMod;
                     // We assume that, for the most part, most music is unchanged from last session.
                     if (!isSameFile) {
-                        // Although it is not the same file, we have to make
-                        // absolutely sure that it is not further down the last
-                        // session file.
+                        /*
+                         * Although it is not the same file, we have to make
+                         * absolutely sure that it is not further down the last
+                         * session file.
+                         */
                         DoubleWrapper<Boolean, Long> locateFileWrapper = tryToLocateFileInPreviouSession(lastSession, lastSessionIndex, strFile);
                         wasFileLocated = locateFileWrapper.getArg1();
                         hasBeenModified = locateFileWrapper.getArg2() != fileLastMod;
@@ -151,9 +158,11 @@ public class MusicSyncer {
                         wasFileLocated = true;
                     }
                     if (wasFileLocated) {
-                        // If and only if the file was located, then we can move
-                        // on to the next file entry. This is to avoid skipping
-                        // a file and prematurely finish the last session.
+                        /*
+                         * If and only if the file was located, then we can move
+                         * on to the next file entry. This is to avoid skipping
+                         * a file and prematurely finish the last session.
+                         */
                         lastSessionIndex++;
                     }
                 }
@@ -170,7 +179,6 @@ public class MusicSyncer {
                      */
                     listOfNewMusic.add(fileEntrySrc);
                 } else {
-                    // System.out.println("ADDING " + fileEntrySrc.getName() + " TO LISTY. I thought it was modified? " + hasBeenModified);
                     sortedListOfSrc.add(fileEntrySrc);
                 }
                 break;
@@ -182,11 +190,18 @@ public class MusicSyncer {
         try {
             Files.write(Paths.get("MLMS_LastSession.txt"), Arrays.asList(currentSession.toString()), Charset.forName("UTF-8"));
         } catch (IOException e) {
-            System.err.println("ERROR: Could not save a list of the music to a .txt file!");
+            System.err.println("FATAL: Could not save a list of the music to a .txt file!");
         }
         return new DoubleWrapper<List<File>, List<File>>(sortedListOfSrc, listOfNewMusic);
     }
     
+    /**
+     * 
+     * @param currentSrcFolder
+     * @param sortedListOfSrc
+     * @param listOfNewMusic
+     * @throws InterruptedException
+     */
     private void updateMetaData(File currentSrcFolder, List<File> sortedListOfSrc, List<File> listOfNewMusic) throws InterruptedException {
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
         UI.writeStatusMessage("Updating metadata...", attr);
@@ -195,7 +210,6 @@ public class MusicSyncer {
             final String strFile = fileEntrySorted.getName();
             final int index = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
             final String strExt = strFile.substring(index + 1);
-
             try {
                 boolean isMP3;
                 switch (strExt.toUpperCase()) {
@@ -308,7 +322,6 @@ public class MusicSyncer {
             musicTagSrc = (MusicTag) AudioFileIO.read(fileSrc).getTag();
             musicDstWriter = AudioFileIO.read(fileDst);
             musicTagDst = (MusicTag) musicDstWriter.getTag();
-            System.out.println("THE ARTISTO IS " + musicTagDst.getFirst(FieldKey.ARTIST));
         }
         // Get each relevant tag from src and dst version of the file and save
         // them in lists for later comparisons.
@@ -335,9 +348,7 @@ public class MusicSyncer {
         boolean didIDetectAChange = false;
         for (int i = 0; i < listOfTagsSrc.size(); i++) {
             keyTagFile = listOfTagsDst.get(i);
-            System.out.println("Comparing " + listOfTagsSrc.get(i).getArg2() + " with " + keyTagFile.getArg2());
             if (!listOfTagsSrc.get(i).getArg2().equals(keyTagFile.getArg2())) {
-                System.out.println("Detected change. Saving");
                 // Update metadata of the target music file (but do not write it yet!).
                 musicTagDst.setField(keyTagFile.getArg1(), listOfTagsSrc.get(i).getArg2());
                 didIDetectAChange = true;
@@ -361,7 +372,6 @@ public class MusicSyncer {
             byte[] srcArtworkArr = srcArtwork.getBinaryData();
             byte[] dstArtworkArr = dstArtwork.getBinaryData();
             if (!Arrays.equals(srcArtworkArr, dstArtworkArr)) {
-                System.out.println("Detected artwork change. Updating");
                 musicTagDst.deleteArtworkField();
                 musicTagDst.setField(srcArtwork);
                 didIDetectAChange = true;
@@ -427,9 +437,9 @@ public class MusicSyncer {
      * ...
      * The music contained in the .txt file should be sorted in an
      * alphabetic order. Use this fact to search through this list and the
-     * current list of music (i.e. the src folder) at the same time. TODO Do
-     * this in parallel with the actual tagging. Something along the lines of a
-     * queue which amasses a list of music to be modified.
+     * current list of music (i.e. the src folder) at the same time.
+     * TODO Do this in parallel with the actual tagging. Something along
+     * the lines of a queue which amasses a list of music to be modified.
      * 
      * @return a list containing the previous session
      */
