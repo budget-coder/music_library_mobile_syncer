@@ -197,15 +197,15 @@ public class MusicSyncer {
             final String strExt = strFile.substring(index + 1);
 
             try {
+                boolean isMP3;
                 switch (strExt.toUpperCase()) {
                 case "MP3":
-                    File mp3InDst = new File(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
-                    updateMusicMetaData(fileEntrySorted, mp3InDst, listOfNewMusic, true);
-                    break;
+                    isMP3 = true;
                 case "M4A":
                     // M4A are structurally the same as MP4 files.
-                    File m4aInDst = new File(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
-                    updateMusicMetaData(fileEntrySorted, m4aInDst, listOfNewMusic, false);
+                    isMP3 = false;
+                    File mpXInDst = new File(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
+                    updateMusicMetaData(fileEntrySorted, mpXInDst, listOfNewMusic, isMP3);
                     break;
                 default:
                     break; // This was not music
