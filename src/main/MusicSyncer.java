@@ -66,6 +66,9 @@ public class MusicSyncer {
     }
     
     /**
+     * This method is used to start the whole syncing process. It consists of
+     * three parts: building a list of modified music, determining what metadata
+     * was changed, and making the appropriate updates.
      * 
      * @throws InterruptedException
      */
@@ -81,9 +84,15 @@ public class MusicSyncer {
     }
 
     /**
+     * This method builds a list of music which has been modified since last
+     * sync session. Note that this means that if the program cannot find a
+     * previous session file, ALL music will be marked as modified until the
+     * metadata is examined closely.
      * 
      * @param currentSrcFolder
-     * @return
+     *            the current source folder. Used to handle nested folders.
+     * @return a tuple of lists containing 1) a list of modified music and 2) a
+     *         list of new music.
      * @throws InterruptedException
      */
     private DoubleWrapper<List<File>, List<File>> buildMusicListToSyncAndDeleteOldFiles(File currentSrcFolder) throws InterruptedException {
@@ -172,11 +181,11 @@ public class MusicSyncer {
                     }
                 }
                 // Check if the music exists in dst.
-                boolean doesFileInDstExist = new File(dstFolder.getAbsolutePath() + "\\" + strFile).exists();
+                File fileInDst = new File(dstFolder.getAbsolutePath() + "\\" + strFile);
                 if (wasFileLocated && !hasBeenModified) {
                     UI.updateProgressBar(2);
                     continue;
-                } else if (optionAddNewMusic && !doesFileInDstExist) {
+                } else if (optionAddNewMusic && !fileInDst.exists()) {
                     /*
                      * If the option was checked, "mark" new music by adding
                      * them to a list whose contents will be added later. This
@@ -202,10 +211,15 @@ public class MusicSyncer {
     }
     
     /**
+     * This method inspects the list of music given and examines the metadata,
+     * updating it if necessary.
      * 
      * @param currentSrcFolder
+     *            the current source folder.
      * @param sortedListOfSrc
+     *            a list of modified music to be examined.
      * @param listOfNewMusic
+     *            a list of new music to be directly copied from src to dst
      * @throws InterruptedException
      */
     private void updateMetaData(File currentSrcFolder, List<File> sortedListOfSrc, List<File> listOfNewMusic) throws InterruptedException {
@@ -243,9 +257,13 @@ public class MusicSyncer {
     }
     
     /**
+     * This method calls the designated copy-method for each file in the given
+     * list.
      * 
      * @param currentSrcFolder
+     *            the current source folder.
      * @param listOfNewMusic
+     *            a list of new music to be added directly.
      * @throws InterruptedException
      */
     private void addNewMusic(File currentSrcFolder, List<File> listOfNewMusic) throws InterruptedException {
@@ -342,6 +360,16 @@ public class MusicSyncer {
             musicDstWriter = AudioFileIO.read(fileDst);
             musicTagDst = (MusicTag) musicDstWriter.getTag();
         }
+        /*
+         * Before getting every relevant metadata, we check the length of both
+         * music files. If the mod. version is not the same, then the music data
+         * has been modified. We can do nothing about that so we just replace it
+         * and return.
+         */
+        if (!musicTagSrc.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH).equals(musicTagDst.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH))) {
+            listOfNewMusic.add(fileSrc);
+            return;
+        }
         // Get each relevant tag from src and dst version of the file and save
         // them in lists for later comparisons.
         final ID3v23Frames id3v23Frame = ID3v23Frames.getInstanceOf();
@@ -371,6 +399,7 @@ public class MusicSyncer {
                 // Update metadata of the target music file (but do not write it yet!).
                 musicTagDst.setField(keyTagFile.getArg1(), listOfTagsSrc.get(i).getArg2());
                 didIDetectAChange = true;
+                System.out.println("Metadata change! Don't add " + fileDst.getName());
             }
         }
         /*
