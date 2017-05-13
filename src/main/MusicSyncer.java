@@ -277,11 +277,17 @@ public class MusicSyncer {
     }
 
     /**
+     * Locate the current file in the previous session file.
      * 
      * @param lastSession
+     *            our last session file where each entry contains a name and a
+     *            last modified.
      * @param lastSessionIndex
+     *            the current index describing our location in src.
      * @param strFile
-     * @return
+     *            the name of the current file.
+     * @return a tuple containing a boolean for whether the file was found and
+     *         its last modified date. If it was not found, then the date is 0.
      */
     private DoubleWrapper<Boolean, Long> tryToLocateFileInPreviouSession(
             List<DoubleWrapper<String, Long>> lastSession, int lastSessionIndex,
@@ -325,11 +331,19 @@ public class MusicSyncer {
     }
     
     /**
+     * Update the appropriate metadata fields if a change is detected. If no
+     * change is detected, then overwrite the file (i.e. a fail-safe) as this
+     * method should only be called when you know the file in dst has been
+     * modified.
      * 
      * @param fileSrc
+     *            the file in src.
      * @param fileDst
+     *            the file in dst.
      * @param listOfNewMusic
+     *            the list of new music to be added directly.
      * @param isMP3
+     *            a boolean to determine whether it is an mp3 or m4a/mp4 file.
      * @throws CannotReadException
      * @throws IOException
      * @throws TagException
@@ -442,6 +456,16 @@ public class MusicSyncer {
         }
     }
     
+    /**
+     * The copy-method which adds music in src to dst.
+     * 
+     * @param fileEntry
+     *            the file in the src folder.
+     * @param folderSrc
+     *            the src folder.
+     * @param folderDst
+     *            the dst folder.
+     */
     private void addNewMusicToDst(final File fileEntry, final File folderSrc, final File folderDst) {
         String strFile = fileEntry.getName();
         try {
@@ -488,15 +512,15 @@ public class MusicSyncer {
     }
     
     /**
-     * ...
-     * The music contained in the .txt file should be sorted in an
-     * alphabetic order. Use this fact to search through this list and the
-     * current list of music (i.e. the src folder) at the same time.
-     * TODO Do this in parallel with the actual tagging. Something along
-     * the lines of a queue which amasses a list of music to be modified.
+     * Load and return the contents of the previous session file, if available.
+     * The music contained in the .txt file should be sorted in an alphabetic
+     * order. Use this fact to search through this list and the current list of
+     * music (i.e. the src folder) at the same time.
+     * TODO Do this in parallel with the actual tagging. Something along the
+     * lines of a queue which amasses a list of music to be modified.
      * 
-     * @return a list containing the previous session
-     * @throws InterruptedException 
+     * @return a list containing the previous session. Otherwise, it is empty.
+     * @throws InterruptedException
      */
     private List<DoubleWrapper<String, Long>> tryToLoadPreviousSession() throws InterruptedException {
         File lastSession = new File("MLMS_LastSession.txt");
@@ -540,11 +564,17 @@ public class MusicSyncer {
     }
     
     /**
-     * ...
-     * Use a StringBuilder to pass the reference to the string by value.
+     * Update the current session file with new entries. We use a StringBuilder
+     * to pass the reference to the string by value and thus update the session
+     * file correctly.
+     * 
      * @param currentSession
+     *            A StringBuilder representation of the the current session
+     *            file.
      * @param strFile
+     *            the current file.
      * @param fileLastMod
+     *            the lsat modified date of the file.
      */
     private void updateCurrentSession(StringBuilder currentSession, String strFile, long fileLastMod) {
         currentSession.append(strFile + "\n");
