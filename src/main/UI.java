@@ -300,6 +300,8 @@ public class UI extends JFrame {
                             } catch (InterruptedException ignore) {}
                             progressBar.setValue(progressBarValue);
                         }
+                        // The syncing is done; set the bar to 100 %.
+                        progressBar.setValue(progressBar.getMaximum());
                     }
                 };
                 progressBarThread = new Thread(progressBarRunnable);
