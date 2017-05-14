@@ -76,7 +76,7 @@ public class MusicSyncer {
         if (srcFolder.isDirectory() && dstFolder.isDirectory()) {
             DoubleWrapper<List<File>, List<File>> tuppleModifiedNewMusic = buildMusicListToSyncAndDeleteOldFiles(srcFolder);
             updateMetaData(srcFolder, tuppleModifiedNewMusic.getArg1(), tuppleModifiedNewMusic.getArg2());
-            addNewMusic(srcFolder, tuppleModifiedNewMusic.getArg2());
+            addNewMusicList(srcFolder, tuppleModifiedNewMusic.getArg2());
         } else {
             StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
             UI.writeStatusMessage("ERROR: The source/target folder is not a folder or does not exist.", attr);
@@ -95,7 +95,7 @@ public class MusicSyncer {
      *         list of new music.
      * @throws InterruptedException
      */
-    private DoubleWrapper<List<File>, List<File>> buildMusicListToSyncAndDeleteOldFiles(File currentSrcFolder) throws InterruptedException {
+    public DoubleWrapper<List<File>, List<File>> buildMusicListToSyncAndDeleteOldFiles(File currentSrcFolder) throws InterruptedException {
         final File[] listOfSrc = srcFolder.listFiles();
         final File[] listOfDst = dstFolder.listFiles();
         // TODO This call here is useless when it comes to nested folders...
@@ -114,7 +114,7 @@ public class MusicSyncer {
         if (optionDeleteOrphanedMusic) {
             UI.writeStatusMessage("Locating orphaned music...", attr);
             String folderSrcPath = currentSrcFolder.getAbsolutePath();
-            lookAndDeleteOrphanedMusicInDst(listOfDst, folderSrcPath);
+            lookForAndDeleteOrphanedMusicInDst(listOfDst, folderSrcPath);
         }
         UI.writeStatusMessage("Finding files in src which have been updated since last session...", attr);
         /*
@@ -222,7 +222,7 @@ public class MusicSyncer {
      *            a list of new music to be directly copied from src to dst
      * @throws InterruptedException
      */
-    private void updateMetaData(File currentSrcFolder, List<File> sortedListOfSrc, List<File> listOfNewMusic) throws InterruptedException {
+    public void updateMetaData(File currentSrcFolder, List<File> sortedListOfSrc, List<File> listOfNewMusic) throws InterruptedException {
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
         UI.writeStatusMessage("Updating metadata...", attr);
         
@@ -255,26 +255,6 @@ public class MusicSyncer {
             }
         }
     }
-    
-    /**
-     * This method calls the designated copy-method for each file in the given
-     * list.
-     * 
-     * @param currentSrcFolder
-     *            the current source folder.
-     * @param listOfNewMusic
-     *            a list of new music to be added directly.
-     * @throws InterruptedException
-     */
-    private void addNewMusic(File currentSrcFolder, List<File> listOfNewMusic) throws InterruptedException {
-        for (final File newMusic : listOfNewMusic) {
-            if (Thread.currentThread().isInterrupted()) {
-                throw new InterruptedException();
-            }
-            addNewMusicToDst(newMusic, currentSrcFolder, dstFolder);
-            UI.updateProgressBar(2);
-        }
-    }
 
     /**
      * Locate the current file in the previous session file.
@@ -289,17 +269,15 @@ public class MusicSyncer {
      * @return a tuple containing a boolean for whether the file was found and
      *         its last modified date. If it was not found, then the date is 0.
      */
-    private DoubleWrapper<Boolean, Long> tryToLocateFileInPreviouSession(
+    public DoubleWrapper<Boolean, Long> tryToLocateFileInPreviouSession(
             List<DoubleWrapper<String, Long>> lastSession, int lastSessionIndex,
             String strFile) {
-        // TODO Ya better add a description of this fuckery. :D
         boolean isOutOfBound = lastSession.size() < lastSessionIndex || lastSessionIndex < 0;
         boolean isPreceedingCurrentFile = false;
         boolean isFollowingCurrentFile = false;
         boolean wasFileLocated = false;
         do {
             int currentFileComparedToPreviousVersion = lastSession.get(lastSessionIndex).getArg1().compareTo(strFile);
-            // System.out.println("Comparing " + strFile + " with " + lastSession.get(lastSessionIndex).getArg1() + ". Value: " + currentFileComparedToPreviousVersion + ".\nIndex is " + lastSessionIndex);
             if (currentFileComparedToPreviousVersion < 0) {
                 // We are too low behind in our session list.
                 if (isFollowingCurrentFile) {
@@ -352,7 +330,7 @@ public class MusicSyncer {
      * @throws CannotWriteException
      * @throws ClassCastException
      */
-    private <MusicTag extends Tag> void updateMusicMetaData(File fileSrc,
+    public <MusicTag extends Tag> void updateMusicMetaData(File fileSrc,
             File fileDst, List<File> listOfNewMusic, boolean isMP3)
             throws CannotReadException, IOException, TagException,
             ReadOnlyFileException, InvalidAudioFrameException,
@@ -380,7 +358,9 @@ public class MusicSyncer {
          * has been modified. We can do nothing about that so we just replace it
          * and return.
          */
-        if (!musicTagSrc.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH).equals(musicTagDst.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH))) {
+        String musicLengthSrc = musicTagSrc.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH);
+        String musicLengthDst = musicTagDst.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH);
+        if (!musicLengthSrc.equals(musicLengthDst)) {
             listOfNewMusic.add(fileSrc);
             return;
         }
@@ -413,7 +393,6 @@ public class MusicSyncer {
                 // Update metadata of the target music file (but do not write it yet!).
                 musicTagDst.setField(keyTagFile.getArg1(), listOfTagsSrc.get(i).getArg2());
                 didIDetectAChange = true;
-                System.out.println("Metadata change! Don't add " + fileDst.getName());
             }
         }
         /*
@@ -447,6 +426,7 @@ public class MusicSyncer {
              * had not changed. So we will just replace the whole file on dst
              * instead.
              */
+            System.out.println("MusicSyncer: Adding " + fileDst.getName() + "; metadata change was NOT detected.");
             listOfNewMusic.add(fileSrc);
         } else {
             // Write the metadata once and for all.
@@ -456,28 +436,34 @@ public class MusicSyncer {
         }
     }
     
+
     /**
-     * The copy-method which adds music in src to dst.
+     * This method copies new music to {@link #dstFolder}.
      * 
-     * @param fileEntry
-     *            the file in the src folder.
-     * @param folderSrc
-     *            the src folder.
-     * @param folderDst
-     *            the dst folder.
+     * @param currentSrcFolder
+     *            the current source folder.
+     * @param listOfNewMusic
+     *            a list of new music to be added directly.
+     * @throws InterruptedException
      */
-    private void addNewMusicToDst(final File fileEntry, final File folderSrc, final File folderDst) {
-        String strFile = fileEntry.getName();
-        try {
-            Path targetPath = folderDst.toPath().resolve(
-                    folderSrc.toPath().relativize(fileEntry.toPath()));
-            Files.copy(fileEntry.toPath(), targetPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
-            StyleConstants.setForeground(attr, DataClass.NEW_MUSIC_COLOR);
-            UI.writeStatusMessage("Added " + strFile + ".", attr);
-        } catch (IOException e) {
-            StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
-            UI.writeStatusMessage("FATAL: Could not copy " + strFile + " to destination.", attr);
-        } 
+    public void addNewMusicList(File currentSrcFolder, List<File> listOfNewMusic) throws InterruptedException {
+        for (final File newMusic : listOfNewMusic) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
+            String strFile = newMusic.getName();
+            Path targetPath = dstFolder.toPath().resolve(currentSrcFolder
+                    .toPath().relativize(currentSrcFolder.toPath()));
+            try {
+                Files.copy(newMusic.toPath(), targetPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+                StyleConstants.setForeground(attr, DataClass.NEW_MUSIC_COLOR);
+                UI.writeStatusMessage("Added " + strFile + ".", attr);
+            } catch (IOException e) {
+                StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
+                UI.writeStatusMessage("FATAL: Could not copy " + strFile + " to destination.", attr);
+            }
+            UI.updateProgressBar(2);
+        }
     }
     
     /**
@@ -491,7 +477,7 @@ public class MusicSyncer {
      *            the path to the folder.
      * @throws InterruptedException 
      */
-    private void lookAndDeleteOrphanedMusicInDst(File[] listOfFolder, String pathOfFolder) throws InterruptedException {
+    public void lookForAndDeleteOrphanedMusicInDst(File[] listOfFolder, String pathOfFolder) throws InterruptedException {
         for (final File fileEntryDst : listOfFolder) {
             if (Thread.currentThread().isInterrupted()) {
                 throw new InterruptedException();
@@ -522,7 +508,7 @@ public class MusicSyncer {
      * @return a list containing the previous session. Otherwise, it is empty.
      * @throws InterruptedException
      */
-    private List<DoubleWrapper<String, Long>> tryToLoadPreviousSession() throws InterruptedException {
+    public List<DoubleWrapper<String, Long>> tryToLoadPreviousSession() throws InterruptedException {
         File lastSession = new File("MLMS_LastSession.txt");
         // If the file does not exist, then create it for the future syncing.
         if (!lastSession.exists()) {
@@ -569,14 +555,13 @@ public class MusicSyncer {
      * file correctly.
      * 
      * @param currentSession
-     *            A StringBuilder representation of the the current session
-     *            file.
+     *            A StringBuilder representation of the current session file.
      * @param strFile
      *            the current file.
      * @param fileLastMod
-     *            the lsat modified date of the file.
+     *            the last modified date of the file.
      */
-    private void updateCurrentSession(StringBuilder currentSession, String strFile, long fileLastMod) {
+    public void updateCurrentSession(StringBuilder currentSession, String strFile, long fileLastMod) {
         currentSession.append(strFile + "\n");
         currentSession.append(fileLastMod + "\n");
     }
