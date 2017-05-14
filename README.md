@@ -5,10 +5,12 @@ A Java program for syncing your local music library to your Android or other mob
 To be filled out...
 
 ## Useful links: <br/>
+Testing: http://joel-costigliola.github.io/assertj/assertj-core-quick-start.html
 Tag info: https://en.wikipedia.org/wiki/ID3 <br/>
 Tag mappings: https://picard.musicbrainz.org/docs/mappings/ <br/>
 
 ## To-Do List: <br/>
+- Add an ant and ivy script for auto-downloading the libraries.
 - Add tests and actually have code coverage.
 - Make it possible to auto-detect Android device.
 - Add javadoc to all methods...
