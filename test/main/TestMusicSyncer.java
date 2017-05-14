@@ -21,7 +21,9 @@ public class TestMusicSyncer {
     @Test
     public void shouldCreateSessionFileIfNoneExist() {
         File previousSession = new File(System.getProperty("user.dir") + "\\MLMS_LastSession.txt");
-        assertThat(!previousSession.exists()).isTrue();
+        if (previousSession.exists()) {
+            assertThat(previousSession.delete()).isTrue();
+        }
         try {
             musicSync.tryToLoadPreviousSession();
             assertThat(previousSession.exists()).isTrue();
