@@ -12,7 +12,7 @@ import org.jaudiotagger.tag.mp4.Mp4Tag;
 public class RandomMetadataUpdater {
     public static void main(String args[]) {
         File fileFolderSrc = new File(args[0].replace('\\', '/'));
-        if (fileFolderSrc.isDirectory()) {  
+        if (fileFolderSrc.isDirectory()) {
             Random random = new Random();
             for (final File fileEntry : fileFolderSrc.listFiles()) {
                 int randomInt = random.nextInt(5);
