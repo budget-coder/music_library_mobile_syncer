@@ -204,6 +204,7 @@ public class MusicSyncer {
         // When all is finished and done, save the list of music to a .txt file (will overwrite existing).
         try {
             Files.write(Paths.get("MLMS_LastSession.txt"), Arrays.asList(currentSession.toString()), Charset.forName("UTF-8"));
+            Paths.get("MLMS_LastSession.txt").toFile().setWritable(false);
         } catch (IOException e) {
             System.err.println("FATAL: Could not save a list of the music to a .txt file!");
         }
