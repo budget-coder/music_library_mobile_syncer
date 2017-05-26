@@ -1,6 +1,7 @@
 /bin/
 /lib/
+/test/music_samples/*
+!test/music_samples/ADD_MUSIC_ETC_FOR_TESTING.txt
 .project
 .classpath
-/MLMS_Settings.txt
-/MLMS_LastSession.txt
+/*.txt
