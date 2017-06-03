@@ -31,16 +31,18 @@ import org.jaudiotagger.tag.TagException;
 import org.jaudiotagger.tag.id3.ID3v23Frames;
 import org.jaudiotagger.tag.images.Artwork;
 
+import com.sun.media.jfxmedia.logging.Logger;
+
 import data.DataClass;
 import data.DoubleWrapper;
 
-public class MusicSyncer {    
+public class MusicSyncer {
     private final File srcFolder;
     private final File dstFolder;
     private boolean optionAddNewMusic;
     private boolean optionDeleteOrphanedMusic;
     private boolean optionSearchInSubdirectories;
-    private SimpleAttributeSet attr;
+    private final SimpleAttributeSet attr;
     /**
      * We want to make a list of keys to avoid duplication and reduce the
      * likelihood of the programmer forgetting to check for a key. This list
@@ -116,6 +118,7 @@ public class MusicSyncer {
             String folderSrcPath = currentSrcFolder.getAbsolutePath();
             lookForAndDeleteOrphanedMusicInDst(listOfDst, folderSrcPath);
         }
+        StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
         UI.writeStatusMessage("Finding files in src which have been updated since last session...", attr);
         /*
          * We use a separate index for the last session file because we cannot
@@ -203,6 +206,7 @@ public class MusicSyncer {
         }
         // When all is finished and done, save the list of music to a .txt file (will overwrite existing).
         try {
+            Paths.get("MLMS_LastSession.txt").toFile().setWritable(true);
             Files.write(Paths.get("MLMS_LastSession.txt"), Arrays.asList(currentSession.toString()), Charset.forName("UTF-8"));
             Paths.get("MLMS_LastSession.txt").toFile().setWritable(false);
         } catch (IOException e) {
@@ -427,7 +431,6 @@ public class MusicSyncer {
              * had not changed. So we will just replace the whole file on dst
              * instead.
              */
-            System.out.println("MusicSyncer: Adding " + fileDst.getName() + "; metadata change was NOT detected.");
             listOfNewMusic.add(fileSrc);
         } else {
             // Write the metadata once and for all.
@@ -453,15 +456,16 @@ public class MusicSyncer {
                 throw new InterruptedException();
             }
             String strFile = newMusic.getName();
-            Path targetPath = dstFolder.toPath().resolve(currentSrcFolder
-                    .toPath().relativize(currentSrcFolder.toPath()));
+            //Path targetPath = dstFolder.toPath().resolve(currentSrcFolder.toPath().relativize(currentSrcFolder.toPath()));
+            Path targetPath = dstFolder.toPath().resolve(strFile);
             try {
                 Files.copy(newMusic.toPath(), targetPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
                 StyleConstants.setForeground(attr, DataClass.NEW_MUSIC_COLOR);
                 UI.writeStatusMessage("Added " + strFile + ".", attr);
             } catch (IOException e) {
                 StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
-                UI.writeStatusMessage("FATAL: Could not copy " + strFile + " to destination.", attr);
+                UI.writeStatusMessage("FATAL: Could not copy " + strFile + " to destination." + newMusic.toPath() + " and " + targetPath, attr);
+                e.printStackTrace();
             }
             UI.updateProgressBar(2);
         }
@@ -516,10 +520,11 @@ public class MusicSyncer {
             try {
                 lastSession.createNewFile();
             } catch (IOException e) {
-                System.out.println("FATAL: Could not create a file to store the current list of music in!");
+                StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
+                UI.writeStatusMessage("FATAL: Could not create a file to store the current list of music in!", attr);
             }
         }
-        List<DoubleWrapper<String, Long>> lastSessionList = new ArrayList<>();  
+        List<DoubleWrapper<String, Long>> lastSessionList = new ArrayList<>();
         // Try-with-ressources to ensure that the stream is closed. Notice that
         // we do not just make a new instance of FileReader because it uses
         // Java's platform default encoding, and that is not always correct!
