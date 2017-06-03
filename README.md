@@ -17,3 +17,4 @@ Tag mappings: https://picard.musicbrainz.org/docs/mappings/ <br/>
 - Add javadoc to all methods...
 - ~~Add interrupt checking~~.
 - Make it work for nested folders
+- BUG: if a music piece cannot be added to the dst, then it will think it succeeded when the program is opened next time. This is because the music's name and last modified date is added to MLMS_LastSession.txt regardless of the result. (This might also apply to unsuccessful deletions.)
