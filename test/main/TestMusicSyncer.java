@@ -3,6 +3,10 @@ package main;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,30 +22,38 @@ import data.DoubleWrapper;
 // http://memorynotfound.com/add-junit-listener-example/
 public class TestMusicSyncer {
     private MusicSyncer musicSync;
-    private static final String MUSIC_ORI = "D:\\Users\\Aram\\MEGA\\Music\\Music (tags missing or not sorted)\\TEST_ORI";
-    private static final String MUSIC_MOD = "D:\\Users\\Aram\\MEGA\\Music\\Music (tags missing or not sorted)\\TEST_MOD";
-    private static final File PREVIOUS_SESSION = new File(System.getProperty("user.dir") + "\\MLMS_LastSession.txt");
+    private static final Path ROOT_DIR = Paths.get(System.getProperty("user.dir"));
+    private static final String MUSIC_ORI = ROOT_DIR.resolve("test\\music_samples\\source").toString();
+    private static final String MUSIC_MOD = ROOT_DIR.resolve("test\\music_samples\\destination").toString();
+    private static final File PREVIOUS_SESSION = ROOT_DIR.resolve("MLMS_LastSession.txt").toFile();
     private static File previousSessionCopy;
     private static boolean didIBackupSessionFile = false;
 
     @BeforeClass
     public static void initialization() {
-        final long currentNanoTime = System.nanoTime();
-        // Make a copy of the file, adding the nanotime at the end of the name but before the extension .txt which is 4 characters.
-        previousSessionCopy = new File(
-                new StringBuilder(PREVIOUS_SESSION.getName())
-                        .insert(PREVIOUS_SESSION.getName().length() - 4,
-                                currentNanoTime)
-                        .toString());
         if (PREVIOUS_SESSION.exists()) {
-            // Found existing copy. Make backup!
-            assertThat(PREVIOUS_SESSION.renameTo(previousSessionCopy)).isTrue();
+            // Found existing copy. Make backup by adding the nanotime at the
+            // end of the name but before the extension .txt which is 4
+            // characters.
+            final long currentNanoTime = System.nanoTime();
+            previousSessionCopy = new File(
+                    new StringBuilder(PREVIOUS_SESSION.getName())
+                            .insert(PREVIOUS_SESSION.getName().length() - 4,
+                                    currentNanoTime)
+                            .toString());
+            try {
+                Files.copy(PREVIOUS_SESSION.toPath(), previousSessionCopy.toPath());
+            } catch (IOException e) {
+                System.err.println("FATAL: Could not backup the previous session file by making a copy"
+                        + "with the current nanotime appended to it. Exitting...");
+            }
+            // assertThat(PREVIOUS_SESSION.renameTo(previousSessionCopy)).isTrue();
             didIBackupSessionFile = true;
         }
     }
 
-     @AfterClass
-     public static void cleanup() {
+    @AfterClass
+    public static void cleanup() {
          if (didIBackupSessionFile) {
              // Restore backup by deleting the empty file that was created.
              assertThat(PREVIOUS_SESSION.delete()).isTrue();
@@ -56,25 +68,25 @@ public class TestMusicSyncer {
     
     @Test
     public void shouldCreateSessionFileIfNoneExist() {
-        // Get workspace dir where the application is launched.
-        File previousSession = new File(System.getProperty("user.dir") + "\\MLMS_LastSession.txt");
+        if (PREVIOUS_SESSION.exists()) {
+            assertThat(PREVIOUS_SESSION.delete()).isTrue();
+        }
         try {
             musicSync.tryToLoadPreviousSession();
-            assertThat(previousSession.exists()).isTrue();
+            assertThat(PREVIOUS_SESSION.exists()).isTrue();
         } catch (InterruptedException ignore) {}
     }
     
     @Test
     public void shouldLoadPreviousSessionFile() {
-        List<DoubleWrapper<String, Long>> previousSession = new ArrayList<>();
-        File previousSessionFile = new File(System.getProperty("user.dir") + "\\MLMS_LastSession.txt");
-        if (previousSessionFile.exists()) {
+        List<DoubleWrapper<String, Long>> previousSessionList = new ArrayList<>();
+        if (PREVIOUS_SESSION.exists()) {
             try {
-                previousSession = musicSync.tryToLoadPreviousSession();
-                if (previousSessionFile.length() > 0) {
-                    assertThat(previousSession.isEmpty()).isFalse();
+                previousSessionList = musicSync.tryToLoadPreviousSession();
+                if (PREVIOUS_SESSION.length() > 0) {
+                    assertThat(previousSessionList.isEmpty()).isFalse();
                 } else {
-                    assertThat(previousSession.isEmpty()).isTrue();
+                    assertThat(previousSessionList.isEmpty()).isTrue();
                 }
             } catch (InterruptedException ignore) {}
         }
