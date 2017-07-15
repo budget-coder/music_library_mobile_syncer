@@ -1,7 +1,5 @@
 /bin/
 /lib/
-/test/music_samples/*
-!test/music_samples/ADD_MUSIC_ETC_FOR_TESTING.txt
 .project
 .classpath
 /*.txt
