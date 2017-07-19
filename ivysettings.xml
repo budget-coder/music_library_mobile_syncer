@@ -1,0 +1,11 @@
+<!-- This file is necessary as jaudiotagger does not exist on mvnrepository.com,
+which ivy defaults to. Thus, we add another resolver, namely dl.bintray.com,
+which is a maven repository and is where jaudiotagger is located.-->
+<ivysettings>
+    <settings defaultResolver="chain"/>
+    <resolvers>
+        <chain name="chain">
+            <ibiblio name="jaudiotagger-repository" root="https://dl.bintray.com/ijabz/maven" m2compatible="true" </>
+        </chain>
+    </resolvers>
+</ivysettings>

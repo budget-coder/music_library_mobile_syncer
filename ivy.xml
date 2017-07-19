@@ -1,0 +1,56 @@
+<!-- Useful links:
+[1] https://www.symphonious.net/2010/01/25/using-ivy-for-dependency-management/
+[2] http://wrongnotes.blogspot.dk/2014/02/simplest-explanation-of-ivy.html
+[3] http://ant.apache.org/ivy/history/2.2.0/ivyfile/configurations.html
+[4] https://stackoverflow.com/questions/7046198/ignore-sources-jar-in-ivy-retrieve
+-->
+
+<ivy-module version="2.0">
+  <info organisation="aram" module="mlms"/>
+  <!-- EXPLANATION:
+  <dependency> is a sub-element to <ivy-module>/<dependencies> and is another word for repository, i.e. what library do you need to fetch?
+  <configurations> organizes whatever we fetch with the <dependency> tags. For instance, some libraries are maybe only necessary for testing (ex. junit), some are just required to compile the code and should not be shipped with the production code, some libraries are just needed for the project jar (i.e. no javadoc, source code, other dependencies etc.) and so forth.
+  Notice here that we have two configurations: "default" and "optional". These configurations are made-up, but they have to correspond to something specified by the scope attribute in Maven because we fetch from a maven rep. Therefore, we add the attribute "defaultconfmapping" to say, FOR ALL DEPENDENCIES, what the two configurations map to on Maven.
+  Alternatively, it could be done seperately in the "conf" attribute for each <dependency>.
+  -->
+  <configurations
+	defaultconfmapping=
+		"default->default;
+		optional->sources, javadoc;
+		code-and-javadoc->default, javadoc">
+	<conf name="default" description="Default configuration"/>
+	<conf name="code-and-javadoc" description="Fetches project jar and javadoc"/>
+	<conf name="optional" description="Contains source code and documentation"/>
+  </configurations>
+  
+  <dependencies>
+    <!-- JUnit testing and matchers -->
+    <dependency org="junit" 
+		name="junit" 
+		rev="4.12"
+		conf="code-and-javadoc"/>
+		<!-- Additionally, we map default to javadoc just to fetch it-->
+    <dependency org="org.hamcrest" 
+		name="hamcrest-core" 
+		rev="1.3"
+		conf="default"/>
+	<dependency org="org.assertj"
+		name="assertj-core"
+		rev="3.7.0"
+		conf="code-and-javadoc"/>
+	<!-- JAudiotagger should be 2.2.6 but it is not on the maven rep. yet. -->
+    <dependency org="net.jthink" 
+		name="jaudiotagger"
+		rev="2.2.3"
+		conf="default;optional"/>
+    <!-- SLF4J logging and binding to Log4J -->
+	<!--
+    <dependency org="org.slf4j" 
+		name="slf4j-api" 
+		rev="1.7.21"/>
+    <dependency org="org.slf4j" 
+		name="slf4j-log4j12" 
+		rev="1.7.21"/>
+	-->
+  </dependencies>
+</ivy-module>

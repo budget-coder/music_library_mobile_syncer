@@ -1,0 +1,272 @@
+<project name="mlms" default="help" basedir="."
+	 xmlns:ivy="antlib:org.apache.ivy.ant"
+         xmlns:jacoco="antlib:org.jacoco.ant">
+
+  <target name="help">
+    <echo>
+  Development Targets
+	build.src:	Compile production code
+    clean:		Remove all intermediate files and folders
+	
+    test:		Run JUnit test cases
+    coverage:	Produce test coverage report
+    
+	javadoc:	Generate javadoc for production code
+
+  Execution targets
+    gui:		Run the MLMS application.
+
+  Aram Al-Sabti, 2017.
+    </echo>
+  </target>
+
+  <!-- Folder properties -->
+  <property name="src.dir" value="src" />  
+  <property name="test.dir" value="test" />
+
+  <property name="lib.dir" value="lib" />
+  <property name="bin.dir" value="bin" />
+
+  <property name="resource.dir" value="resource" />
+
+  <property name="javadoc.dir" value="javadoc" />
+
+  <!-- JaCoCo Coverage analysis -->
+  <taskdef uri="antlib:org.jacoco.ant" 
+	   resource="org/jacoco/ant/antlib.xml">
+    <classpath path="lib-core/jacocoant.jar"/>
+  </taskdef>
+
+  <property name="test.output.directory" value="TEST-RESULT"/>
+  <property name="jacoco.report.dir" value="${test.output.directory}/report" />
+  <property name="jacoco.exec" value="${test.output.directory}/jacoco.exec" />
+
+  <!-- Paths used for compilation and run -->
+  <path id="lib.path.id">
+    <fileset dir="${lib.dir}" />
+  </path>
+
+  <path id="run.path.id">
+    <path refid="lib.path.id" />
+    <path location="${bin.dir}" />
+  </path>
+  
+  <!-- House holding -->
+  <target name="clean" 
+          description="--> Clean everything, remove all .class and lib files">
+    <delete dir="${bin.dir}"/>
+    <delete dir="${lib.dir}"/>
+    <delete dir="${test.output.directory}"/>
+    <delete dir="${javadoc.dir}"/>
+  </target>
+  
+  <target name="prepare">
+    <mkdir dir="${bin.dir}"/>
+    <mkdir dir="${lib.dir}"/>
+    <mkdir dir="${test.output.directory}"/>
+    <mkdir dir="${javadoc.dir}"/>
+  </target>
+  
+  <!-- Ivy dependency management -->
+  <target name="resolve" 
+	  description="--> Retrieve dependencies with Ivy">
+    <ivy:retrieve/>
+  </target>    
+  
+  <target name="report" depends="resolve" 
+	  description="--> Generates a report of dependencies for Ivy">
+    <ivy:report todir="${bin.dir}"/>
+  </target>
+
+  <!-- Compilation tasks -->
+  <target name="build.src" depends="prepare,resolve"
+          description="--> Compile production code source files">
+    <javac srcdir="${src.dir}"
+	   destdir="${bin.dir}"
+	   debug="on" 
+	   classpathref="lib.path.id" 
+	   includeAntRuntime="false">
+    </javac>
+  </target>
+
+  <target name="build.test" depends="build.src"
+          description="--> Compile test code source files">
+    <javac srcdir="${test.dir}"
+	   destdir="${bin.dir}"
+	   debug="on" 
+	   classpathref="lib.path.id" 
+	   includeAntRuntime="false">
+    </javac>
+  </target>
+
+  <!-- Resources to be put into their proper place -->
+  <target name="copy.resource">
+    <copy file="${resource.dir}/log4j.properties" todir="${bin.dir}"/>
+  </target>
+  
+  <!-- Build everything -->
+  <target name="build.all" 
+	  depends="build.test,copy.resource"
+          description="--> Build everything"/>
+
+  <!-- JUnit testing -->
+  <target name="test"  depends="build.all"
+          description="--> Run JUnit unit and integration tests">
+    <junit printsummary="yes" fork="yes" 
+	   forkmode="once"
+	   haltonfailure="yes">
+      <formatter type="plain"/>
+      <batchtest fork="yes" todir="${test.output.directory}">
+	<fileset dir="${test.dir}">
+	  <include name="**/Test*.java"/>
+	</fileset>
+      </batchtest>
+      <classpath refid="run.path.id"/>
+    </junit>
+  </target>
+
+  <!-- Run JUnit with JaCoCo code coverage -->
+  <target name="run.junit" depends="build.all"
+          description="--> Run JUnit and generate coverage data for all tests">
+    <jacoco:coverage destfile="${jacoco.exec}" >
+      <junit printsummary="yes" fork="yes" 
+	     forkmode="once"
+	     haltonfailure="yes">
+	<formatter type="plain"/>
+	<batchtest fork="yes" todir="${test.output.directory}">
+	  <fileset dir="${test.dir}">
+	    <include name="**/Test*.java"/>
+	  </fileset>
+	</batchtest>
+	<classpath refid="run.path.id"/>
+      </junit>
+    </jacoco:coverage>
+  </target>
+
+  <!-- Make JaCoCo generate a HTML based report of code coverage -->
+  <target name="coverage" depends="run.junit"
+	  description="--> Generate code coverage report in the report directory">
+    <jacoco:report>
+      <executiondata>
+        <file file="${jacoco.exec}"/>
+      </executiondata>
+      <structure name="Coverage of SkyCave" >
+        <classfiles>
+          <fileset dir="${bin.dir}">
+            <!-- We do not generate coverage for the test case source
+                 code, manual test cases, nor the socket based impl
+                 and main methods. -->
+	    <exclude name="**/Test*"/>
+	    <exclude name="**/manual/*"/>
+	    <exclude name="**/main/*"/>
+	    <exclude name="**/socket/**"/>
+	  </fileset>
+        </classfiles>
+        <sourcefiles encoding="UTF-8" tabwidth="2">
+	  <fileset dir="${src.dir}"/>
+        </sourcefiles>
+      </structure>
+      <html destdir="${jacoco.report.dir}"/>
+    </jacoco:report>
+    <echo message="To see report, browse to index.html in ${jacoco.report.dir}."/>
+  </target>
+
+  <!-- JavaDoc generation -->
+  <target name="javadoc" depends="build.src"
+	  description="--> Generate javadoc in folder ${javadoc.dir}">
+    <javadoc
+       source = "1.8"
+       packagenames=
+       "cloud.*"
+       sourcepath="${src.dir}"
+       destdir="${javadoc.dir}"
+       package="true"
+       doctitle="&lt;b&gt;Music Library Music Syncer&lt;/b&gt;"
+       bottom="Aram Al-Sabti, mesebii@gmail.com"
+       windowtitle="MLMS">
+      <sourcepath>
+	<path location="${src.dir}"/>
+      </sourcepath>
+      <classpath>
+	<path refid="run.path.id"/>
+      </classpath>
+    </javadoc>
+    <echo message="Javadoc is in folder: ${javadoc.dir}."/>
+  </target>
+
+  <!--- ===  Execution ===  -->
+  <property name="cpf" value="latest.cpf"/>
+  <property name="id" value="mikkel_aarskort"/>
+  <property name="pwd" value="123"/>
+
+  <!-- Server daemon -->
+  <target name="daemon" 
+          depends="build.all" 
+          description="--> * Execute the SkyCave server daemon">
+    <java classpathref="run.path.id" 
+	  classname="cloud.cave.main.CaveDaemon"
+          fork="true">
+      <arg value="${cpf}"/>
+    </java>
+  </target>
+
+  <!-- Client command interpreter -->
+  <target name="cmd" 
+          depends="build.all" 
+          description="--> * Execute the SkyCave command line client">
+    <java classpathref="run.path.id" 
+	  classname="cloud.cave.main.CaveCmd">
+      <arg value="${cpf}"/>
+      <arg value="${id}"/>
+      <arg value="${pwd}"/>
+    </java>
+  </target>
+
+  <!--- === Tasks associated with reviewing students' submissions -->
+
+  <!-- Review target which is used heavily by Crunch and course instructors -->
+  <target name="review"
+	  depends="clean,coverage"
+	  description="--> (Create zip with code and tests for evaluator review)">
+    <delete file="review.zip"/>
+    <echo message="*** Creating 'review.zip' for evaluator review ***"/>
+    <zip destfile="review.zip"
+	 basedir="."
+	 includes="build.xml, ivy.xml, *.cpf, src/, test/, TEST-RESULT/**, resource/, lib-core/" />
+
+  </target>
+
+  <!--- === Tasks associated with load generation and testing === -->
+ 
+  <!-- Please ignore these tasks during the first couple of weeks 
+       of the course -->
+
+  <!-- load-mongo is used to generate write load on the storage tier -->
+  <target name="load.mongo" 
+          depends="build.all" 
+          description="--> * Execute the storage tier load generator">
+    <java classpathref="run.path.id" 
+	  classname="cloud.cave.manual.LoadGenerateStorageWrite">
+      <arg value="${cpf}"/> <!-- CPF defining configuration -->
+    </java>
+  </target>
+
+  <!-- load-cave is used to generate random user traffic on the app
+       server tier. 
+       cp = number of players to put into cave;
+       iter = number of 'explorations' of each in cave;
+  -->
+  <property name="cp" value="20"/>
+  <property name="iter" value="10"/>
+
+  <target name="load.cave" 
+          depends="build.all" 
+          description="--> * Execute the app server tier load generator">
+    <java classpathref="run.path.id" 
+	  classname="cloud.cave.manual.LoadGenerateCave">
+      <arg value="${cpf}"/> <!-- CPF defining configuration -->
+      <arg value="${cp}"/> <!-- count player -->
+      <arg value="${iter}"/> <!-- iterations in cave -->
+    </java>
+  </target>
+</project>
