@@ -2,7 +2,7 @@
 A Java program for syncing your local music library to your Android or other mobile device.
 
 ## Usage: <br/>
-Currently, there are two not so practical ways to launch the application:
+Currently, there are two not-so-practical ways to launch the application:
 - If you have [ant](http://ant.apache.org/) installed, you can run the command "ant gui" from the root directory (i.e. where you can see lib-core, src, test etc. This will compile all the classes and launch the GUI.
 - Otherwise, you will have to go inside "src" and compile everything with the "javac" command. Then you launch "UI.class" without any arguments.
 
