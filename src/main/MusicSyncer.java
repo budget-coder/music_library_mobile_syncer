@@ -31,8 +31,6 @@ import org.jaudiotagger.tag.TagException;
 import org.jaudiotagger.tag.id3.ID3v23Frames;
 import org.jaudiotagger.tag.images.Artwork;
 
-import com.sun.media.jfxmedia.logging.Logger;
-
 import data.DataClass;
 import data.DoubleWrapper;
 
@@ -224,7 +222,7 @@ public class MusicSyncer {
      * @param sortedListOfSrc
      *            a list of modified music to be examined.
      * @param listOfNewMusic
-     *            a list of new music to be directly copied from src to dst
+     *            a list of new music to be directly copied from src to dst.
      * @throws InterruptedException
      */
     public void updateMetaData(File currentSrcFolder, List<File> sortedListOfSrc, List<File> listOfNewMusic) throws InterruptedException {
