@@ -7,6 +7,8 @@
   Development Targets
 	build.src:	Compile production code
     clean:		Remove all intermediate files and folders
+	clean-ivy:	Clean the ivy cache (in case some dependencies
+			are not retrieved after modifying build.xml or ivy.xml).
 	
     test:		Run JUnit test cases
     coverage:	Produce test coverage report
@@ -27,7 +29,7 @@
   <property name="lib.dir" value="lib" />
   <property name="bin.dir" value="bin" />
 
-  <property name="resource.dir" value="resource" />
+  <property name="resource.dir" value="resources" />
 
   <property name="javadoc.dir" value="javadoc" />
 
@@ -52,12 +54,16 @@
   </path>
   
   <!-- House holding -->
-  <target name="clean" 
+  <target name="clean" depends="clean-ivy" 
           description="--> Clean everything, remove all .class and lib files">
     <delete dir="${bin.dir}"/>
     <delete dir="${lib.dir}"/>
     <delete dir="${test.output.directory}"/>
     <delete dir="${javadoc.dir}"/>
+  </target>
+  
+  <target name="clean-ivy" description="--> Only clean the ivy cache">
+	<ivy:cleancache/>
   </target>
   
   <target name="prepare">
@@ -70,8 +76,13 @@
   <!-- Ivy dependency management -->
   <target name="resolve" 
 	  description="--> Retrieve dependencies with Ivy">
-    <ivy:retrieve/>
-  </target>    
+    <ivy:retrieve conf="natives"
+		pattern="lib/[conf]/[artifact](-[classifier]).[ext]"/>
+		<!-- Places all dependencies marked as "natives"
+		in the folder corresponding to the pattern -->
+	<ivy:retrieve conf="default, code-and-javadoc, optional"/> 
+		<!-- Place the rest in the lib folder -->
+  </target>
   
   <target name="report" depends="resolve" 
 	  description="--> Generates a report of dependencies for Ivy">
@@ -104,6 +115,7 @@
   <!-- Uncomment this when logging is implemented
     <copy file="${resource.dir}/log4j.properties" todir="${bin.dir}"/>
   -->
+	<copy file="${resource.dir}/javax.usb.properties" todir="${bin.dir}"/>
   </target>
   
   <!-- Build everything -->

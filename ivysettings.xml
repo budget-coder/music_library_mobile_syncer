@@ -5,7 +5,12 @@ which is a maven repository and is where jaudiotagger is located.-->
     <settings defaultResolver="chain"/>
     <resolvers>
         <chain name="chain">
-            <ibiblio name="jaudiotagger-repository" root="https://dl.bintray.com/ijabz/maven" m2compatible="true" />
+			<ibiblio name="maven2-repo1"
+				root="https://repo1.maven.org/maven2/"
+				m2compatible="true"/>
+            <ibiblio name="jaudiotagger-repository"
+				root="https://dl.bintray.com/ijabz/maven"
+				m2compatible="true"/>
         </chain>
     </resolvers>
 </ivysettings>

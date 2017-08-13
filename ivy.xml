@@ -5,7 +5,7 @@
 [4] https://stackoverflow.com/questions/7046198/ignore-sources-jar-in-ivy-retrieve
 -->
 
-<ivy-module version="2.0">
+<ivy-module version="2.0" xmlns:m="http://ant.apache.org/ivy/maven">
   <info organisation="aram" module="mlms"/>
   <!-- EXPLANATION:
   <dependency> is a sub-element to <ivy-module>/<dependencies> and is another word for repository, i.e. what library do you need to fetch?
@@ -16,11 +16,13 @@
   <configurations
 	defaultconfmapping=
 		"default->default;
+		code-and-javadoc->default, javadoc;
 		optional->sources, javadoc;
-		code-and-javadoc->default, javadoc">
+		natives->default">
 	<conf name="default" description="Default configuration"/>
 	<conf name="code-and-javadoc" description="Fetches project jar and javadoc"/>
 	<conf name="optional" description="Contains source code and documentation"/>
+	<conf name="natives" description="Contains all native libraries"/>
   </configurations>
   
   <dependencies>
@@ -43,6 +45,17 @@
 		name="jaudiotagger"
 		rev="2.2.3"
 		conf="default;optional"/>
+	<!-- usb4java, a Java library to access USB devices -->
+	<dependency org="org.usb4java"
+		name="usb4java-javax"
+		rev="1.2.0"
+		conf="code-and-javadoc"/>
+	<dependency org="org.usb4java"
+		name="libusb4java"
+		rev="1.2.0"
+		conf="natives">
+		<artifact name="libusb4java" m:classifier="windows-x86_64"/>
+	</dependency>
     <!-- SLF4J logging and binding to Log4J -->
 	<!--
     <dependency org="org.slf4j" 
