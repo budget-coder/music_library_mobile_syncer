@@ -17,6 +17,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 import data.DoubleWrapper;
+import util.MurmurHash3;
 
 // How to use the junit listener class (alternative to @BeforeClass and @AfterClass):
 // http://memorynotfound.com/add-junit-listener-example/
@@ -96,5 +97,23 @@ public class TestMusicSyncer {
     @Test
     public void shouldIgnoreNonMusic() {
         //musicSync.updateMetaData(currentSrcFolder, sortedListOfSrc, listOfNewMusic);
+    }
+    
+    @Test
+    public void shouldGenerateUniqueHashes() {
+        File musicFile = new File(MUSIC_ORI + "\\ACE+ - Monado Reacts.mp3");
+        File musicFileCopy = new File(MUSIC_ORI + "\\ACE+ - Monado Reacts - Copy.mp3");
+        assertThat(musicFile.exists() && musicFileCopy.exists()).isTrue();
+        int hash1 = 0;
+        int hash2 = 0;
+        try {
+            byte[] musicFileData = Files.readAllBytes(musicFile.toPath());
+            byte[] musicFileDataCopy = Files.readAllBytes(musicFileCopy.toPath());
+            hash1 = MurmurHash3.murmurhash3_x86_32(musicFileData, 0, musicFileData.length, 14);
+            // Check that the same file generates the same hash.
+            assertThat(hash1 == MurmurHash3.murmurhash3_x86_32(musicFileData, 0, musicFileData.length, 14)).isTrue();
+            hash2 = MurmurHash3.murmurhash3_x86_32(musicFileDataCopy, 0, musicFileDataCopy.length, 14);
+        } catch (IOException e) {} // Won't happen because of the assert.
+        assertThat(hash1 != hash2).isTrue();
     }
 }
