@@ -250,7 +250,7 @@ public class UI extends JFrame {
                     if (progressBarThread != null && progressBarThread.isAlive()) {
                         progressBarThread.interrupt();
                     }
-                    progressBar.setValue(0);
+                    progressBarValue = 0;
                     startProgressBarThread();
                     /*
                      * When the start button is pressed, we make a thread of the
