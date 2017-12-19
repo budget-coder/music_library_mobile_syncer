@@ -33,6 +33,7 @@ import org.jaudiotagger.tag.images.Artwork;
 
 import data.DataClass;
 import data.DoubleWrapper;
+import util.MurmurHash3;
 
 public class MusicSyncer {
     private final File srcFolder;
@@ -144,21 +145,29 @@ public class MusicSyncer {
             // Get file name and extension, if any.
             final String strFile = fileEntrySrc.getName();
             final int fileExtIndex = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
-            final String strExt = strFile.substring(fileExtIndex + 1);
-            final long fileLastMod = fileEntrySrc.lastModified();
-            // To make it case-insensitive (and avoid problems with
-            // Turkish), convert to uppercase.
+            final String strExt = strFile.substring(fileExtIndex + 1); 
+            // We use MurmurHash3 on the file size to get a unique hash value to compare with.
+            byte[] fileEntrySrcBytes = null;
+            try {
+                fileEntrySrcBytes = Files.readAllBytes(fileEntrySrc.toPath());
+            } catch (IOException e) { // Should not happen because we know the file exists.
+                System.err.println("FATAL: Could not read bytes of " + strFile + " for hashing.");
+                e.printStackTrace();
+            }
+            final int fileHash = MurmurHash3.murmurhash3_x86_32(fileEntrySrcBytes, 0, strFile.length(), 14);
+            //final long fileLastMod = fileEntrySrc.lastModified();
+            // To make it case-insensitive (and avoid problems with Turkish), convert to uppercase.
             switch (strExt.toUpperCase()) {
             // Exploit the concept of fallthrough.
             case "MP3":
             case "M4A":
                 // Try to locate the file in the previous session instead of checking all the metadata.
-                updateCurrentSession(currentSession, strFile, fileLastMod);
+                updateCurrentSession(currentSession, strFile, fileHash);
                 boolean hasBeenModified = true;
                 boolean wasFileLocated = false;
                 if (lastSessionIndex < lastSession.size()) {
                     final boolean isSameFile = lastSession.get(lastSessionIndex).getArg1().equals(strFile);
-                    hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileLastMod;
+                    hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileHash;
                     // We assume that, for the most part, most music is unchanged from last session.
                     if (!isSameFile) {
                         /*
@@ -168,7 +177,7 @@ public class MusicSyncer {
                          */
                         DoubleWrapper<Boolean, Long> locateFileWrapper = tryToLocateFileInPreviouSession(lastSession, lastSessionIndex, strFile);
                         wasFileLocated = locateFileWrapper.getArg1();
-                        hasBeenModified = locateFileWrapper.getArg2() != fileLastMod;
+                        hasBeenModified = locateFileWrapper.getArg2() != fileHash;
                     } else {
                         wasFileLocated = true;
                     }
@@ -333,6 +342,7 @@ public class MusicSyncer {
      * @throws CannotWriteException
      * @throws ClassCastException
      */
+    @SuppressWarnings("unchecked")
     public <MusicTag extends Tag> void updateMusicMetaData(File fileSrc,
             File fileDst, List<File> listOfNewMusic, boolean isMP3)
             throws CannotReadException, IOException, TagException,
@@ -389,13 +399,13 @@ public class MusicSyncer {
         }
         // Now for the comparisons.
         DoubleWrapper<FieldKey, String> keyTagFile;
-        boolean didIDetectAChange = false;
+        //boolean didIDetectAChange = false;
         for (int i = 0; i < listOfTagsSrc.size(); i++) {
             keyTagFile = listOfTagsDst.get(i);
             if (!listOfTagsSrc.get(i).getArg2().equals(keyTagFile.getArg2())) {
                 // Update metadata of the target music file (but do not write it yet!).
                 musicTagDst.setField(keyTagFile.getArg1(), listOfTagsSrc.get(i).getArg2());
-                didIDetectAChange = true;
+                //didIDetectAChange = true;
             }
         }
         /*
@@ -407,10 +417,10 @@ public class MusicSyncer {
         Artwork dstArtwork = musicTagDst.getFirstArtwork();
         if (srcArtwork != null && dstArtwork == null) {
             musicTagDst.setField(srcArtwork);
-            didIDetectAChange = true;
+            //didIDetectAChange = true;
         } else if (srcArtwork == null && dstArtwork != null) {
             musicTagDst.deleteArtworkField();
-            didIDetectAChange = true;
+            //didIDetectAChange = true;
         } else if (srcArtwork != null && dstArtwork != null) {
             // Only get the first artwork.
             byte[] srcArtworkArr = srcArtwork.getBinaryData();
@@ -418,24 +428,28 @@ public class MusicSyncer {
             if (!Arrays.equals(srcArtworkArr, dstArtworkArr)) {
                 musicTagDst.deleteArtworkField();
                 musicTagDst.setField(srcArtwork);
-                didIDetectAChange = true;
+                //didIDetectAChange = true;
             }
         }
-        if (!didIDetectAChange) {
-            /*
-             * No metadata change was detected. Our filter might not be
-             * comprehensive enough (most likely as this filter was made for
-             * myself). However, we would not end in this method if SOMETHING
-             * had not changed. So we will just replace the whole file on dst
-             * instead.
-             */
-            listOfNewMusic.add(fileSrc);
-        } else {
-            // Write the metadata once and for all.
-            musicDstWriter.setTag(musicTagDst);
-            musicDstWriter.commit();
-            UI.updateProgressBar(2);
-        }
+        //if (!didIDetectAChange) {
+        //    /*
+        //     * No metadata change was detected. Our filter might not be
+        //     * comprehensive enough (most likely as this filter was made for
+        //     * myself). However, we would not end in this method if SOMETHING
+        //     * had not changed. So we will just replace the whole file on dst
+        //     * instead.
+        //     */
+        //    listOfNewMusic.add(fileSrc);
+        //} else {
+        //    // Write the metadata once and for all.
+        //    musicDstWriter.setTag(musicTagDst);
+        //    musicDstWriter.commit();
+        //    UI.updateProgressBar(2);
+        //}
+        // Write the metadata once and for all.
+        musicDstWriter.setTag(musicTagDst);
+        musicDstWriter.commit();
+        UI.updateProgressBar(2);
     }
     
 
