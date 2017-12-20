@@ -150,7 +150,7 @@ public class MusicSyncer {
             byte[] fileEntrySrcBytes = null;
             try {
                 fileEntrySrcBytes = Files.readAllBytes(fileEntrySrc.toPath());
-            } catch (IOException e) { // Should not happen because we know the file exists.
+            } catch (IOException e) { // Will occur if the synchronization is stopped abruptly. 
                 System.err.println("FATAL: Could not read bytes of " + strFile + " for hashing.");
                 e.printStackTrace();
             }
@@ -519,8 +519,6 @@ public class MusicSyncer {
      * The music contained in the .txt file should be sorted in an alphabetic
      * order. Use this fact to search through this list and the current list of
      * music (i.e. the src folder) at the same time.
-     * TODO Do this in parallel with the actual tagging. Something along the
-     * lines of a queue which amasses a list of music to be modified.
      * 
      * @return a list containing the previous session. Otherwise, it is empty.
      * @throws InterruptedException
