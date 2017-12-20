@@ -25,9 +25,11 @@ import javax.swing.JCheckBox;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
+import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
+import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultStyledDocument;
 import javax.swing.text.MutableAttributeSet;
@@ -46,6 +48,7 @@ public class UI extends JFrame {
     private static final long serialVersionUID = 8597395032893667211L;
     private JTextField txtSrcDir;
     private JTextField txtDstDir;
+    private static JScrollPane centerPanel;
     private static JTextPane statusText;
     private static StyledDocument statusTextDoc;
     private static Semaphore readProgressSemaphore;
@@ -128,15 +131,12 @@ public class UI extends JFrame {
         topPanel.add(dirPanel);
         dirPanel.setLayout(new BoxLayout(dirPanel, BoxLayout.Y_AXIS));
         
-        JScrollPane centerPanel = new JScrollPane();
+        centerPanel = new JScrollPane();
         getContentPane().add(centerPanel, BorderLayout.CENTER);
         // Make a text area with customizable text. The document reflects the changes.
         statusTextDoc = new DefaultStyledDocument();
         statusText = new JTextPane(statusTextDoc);
         statusText.setEditable(false);
-        // TODO Implement autoscroll.
-        // http://stackoverflow.com/questions/8789371/java-jtextpane-jscrollpane-de-activate-automatic-scrolling,
-        // https://tips4java.wordpress.com/2008/10/22/text-area-scrolling/
         statusText.setText("Status window:\n");
         centerPanel.setViewportView(statusText);
         
@@ -164,7 +164,8 @@ public class UI extends JFrame {
         } catch (ClassNotFoundException | InstantiationException
                 | IllegalAccessException
                 | UnsupportedLookAndFeelException e1) {
-            System.err.println("FATAL: Could not open the browse dialog. Please input the destination of source folder manually.");
+            System.err.println("FATAL: Could not open the browse dialog. +
+                Please input the destination of source folder manually.");
         } */
         new JFXPanel(); // Initialize JavaFX thread when using its FileChooser (ideally called once)
         dirChooser = new DirectoryChooser();
@@ -282,7 +283,8 @@ public class UI extends JFrame {
                             }
                             SimpleAttributeSet attr = new SimpleAttributeSet();
                             StyleConstants.setForeground(attr, Color.BLUE);
-                            writeStatusMessage("Finished. Time taken: " + (System.currentTimeMillis() - timeStart) + " ms.", attr);
+                            writeStatusMessage("Finished. Time taken: " + 
+                                    (System.currentTimeMillis() - timeStart) + " ms.", attr);
                         }
                     };
                     musicSyncerThread = new Thread(musicSyncerRunnable);
@@ -403,7 +405,7 @@ public class UI extends JFrame {
     }
 
     /**
-     * ...
+     * Write messages to the UI for the user to see.
      * Only package visible to avoid calls from, for instance, the test package.
      * @param message
      * @param attributeSet
@@ -411,12 +413,37 @@ public class UI extends JFrame {
     static void writeStatusMessage(String message, MutableAttributeSet attributeSet) {
         try {
             statusTextDoc.insertString(statusTextDoc.getLength(), message + "\n", attributeSet);
-        } catch (BadLocationException e) {
-            // This should not happen
-            System.err.println(
-                    "FATAL: Could not write status message because of an invalid position. The error message: "
-                            + e.getMessage());
+        } catch (BadLocationException e) { // This should not happen
+            System.err.println("FATAL: Could not write status message because of an"
+                    + "invalid position. The error message: " + e.getMessage());
         }
+        // Implement auto-scroll unless the scroll bar is manually moved up.
+        if (isViewAtBottom()) {
+            scrollToBottom();
+        }
+    }
+    
+    /**
+     * Helper method to determine if the scroll bar is at the bottom (i.e.
+     * cannot be scrolled more down).
+     * 
+     * @return true if the scroll bar is at the bottom; otherwise false.
+     */
+    private static boolean isViewAtBottom() {
+        JScrollBar scrollBar = centerPanel.getVerticalScrollBar();
+        final int min = scrollBar.getValue() + scrollBar.getVisibleAmount();
+        final int max = scrollBar.getMaximum();
+        System.out.println(min + " " + max);
+        return min == max;
+    }
+
+    private static void scrollToBottom() {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                centerPanel.getVerticalScrollBar().setValue(
+                    centerPanel.getVerticalScrollBar().getMaximum());
+            }
+        });
     }
     
     /**
