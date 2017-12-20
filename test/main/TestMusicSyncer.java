@@ -45,10 +45,9 @@ public class TestMusicSyncer {
             try {
                 Files.copy(PREVIOUS_SESSION.toPath(), previousSessionCopy.toPath());
             } catch (IOException e) {
-                System.err.println("FATAL: Could not backup the previous session file by making a copy"
+                System.err.println("FATAL: Could not backup the previous session file "
                         + "with the current nanotime appended to it. Exitting...");
             }
-            // assertThat(PREVIOUS_SESSION.renameTo(previousSessionCopy)).isTrue();
             didIBackupSessionFile = true;
         }
     }
@@ -58,7 +57,9 @@ public class TestMusicSyncer {
          if (didIBackupSessionFile) {
              // Restore backup by deleting the empty file that was created.
              assertThat(PREVIOUS_SESSION.delete()).isTrue();
-             assertThat(previousSessionCopy.getAbsoluteFile().renameTo(new File(PREVIOUS_SESSION.getName()))).isTrue();
+             assertThat(previousSessionCopy.getAbsoluteFile().renameTo(
+                     new File(PREVIOUS_SESSION.getName()))).isTrue();
+             didIBackupSessionFile = false;
          }
      }
     
