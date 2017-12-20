@@ -46,7 +46,7 @@
 		rev="2.2.3"
 		conf="default;optional"/>
 	<!-- usb4java, a Java library to access USB devices -->
-	<dependency org="org.usb4java"
+	<!-- <dependency org="org.usb4java"
 		name="usb4java-javax"
 		rev="1.2.0"
 		conf="code-and-javadoc"/>
@@ -56,6 +56,7 @@
 		conf="natives">
 		<artifact name="libusb4java" m:classifier="windows-x86_64"/>
 	</dependency>
+	-->
     <!-- SLF4J logging and binding to Log4J -->
 	<!--
     <dependency org="org.slf4j" 

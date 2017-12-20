@@ -27,6 +27,7 @@
   <property name="test.dir" value="test" />
 
   <property name="lib.dir" value="lib" />
+  <property name="lib-core.dir" value="lib-core" />
   <property name="bin.dir" value="bin" />
 
   <property name="resource.dir" value="resources" />
@@ -46,6 +47,7 @@
   <!-- Paths used for compilation and run -->
   <path id="lib.path.id">
     <fileset dir="${lib.dir}" />
+	<fileset dir="${lib-core.dir}" />
   </path>
 
   <path id="run.path.id">
@@ -115,7 +117,7 @@
   <!-- Uncomment this when logging is implemented
     <copy file="${resource.dir}/log4j.properties" todir="${bin.dir}"/>
   -->
-	<copy file="${resource.dir}/javax.usb.properties" todir="${bin.dir}"/>
+	<!-- <copy file="${resource.dir}/javax.usb.properties" todir="${bin.dir}"/> -->
   </target>
   
   <!-- Build everything -->
