@@ -1,6 +1,5 @@
 package main;
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.EventQueue;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -29,7 +28,6 @@ import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
-import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultStyledDocument;
 import javax.swing.text.MutableAttributeSet;
@@ -37,6 +35,7 @@ import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
 
+import data.DataClass;
 import javafx.application.Platform;
 import javafx.embed.swing.JFXPanel;
 import javafx.stage.DirectoryChooser;
@@ -80,13 +79,14 @@ public class UI extends JFrame {
      */
     public static void main(String[] args) {
         EventQueue.invokeLater(new Runnable() {
+            @Override
             public void run() {
-                try {
+                //try {
                     UI frame = new UI();
                     frame.setVisible(true);
-                } catch (Exception e) {
-                    System.err.println("FATAL: " + e + ": " + e.getMessage());
-                }
+                //} catch (Exception e) {
+                //    System.err.println("FATAL: " + e + ": " + e.getMessage());
+                //}
             }
         });
     }
@@ -212,11 +212,11 @@ public class UI extends JFrame {
         JCheckBox addNewMusicCheckBox = new JCheckBox("Add new music");
         // Load previous settings and only care about whether "true" was written correctly.
         addNewMusicCheckBox.setSelected(Boolean.valueOf(arrayOfSettings[addNewMusicIndex]));
-        addNewMusicCheckBox.setForeground(Color.BLUE);
+        addNewMusicCheckBox.setForeground(DataClass.NEW_MUSIC_COLOR);
         westPanel.add(addNewMusicCheckBox);
         JCheckBox deleteOrphanedCheckBox = new JCheckBox("Delete orphaned music");
         deleteOrphanedCheckBox.setSelected(Boolean.valueOf(arrayOfSettings[deleteOrphanedIndex]));
-        deleteOrphanedCheckBox.setForeground(Color.ORANGE);
+        deleteOrphanedCheckBox.setForeground(DataClass.DEL_MUSIC_COLOR);
         westPanel.add(deleteOrphanedCheckBox);
         JCheckBox searchInSubdirectoriesCheckBox = new JCheckBox("Search in subdirectories");
         searchInSubdirectoriesCheckBox.setSelected(Boolean.valueOf(arrayOfSettings[searchInSubdirectoriesIndex]));
@@ -273,7 +273,7 @@ public class UI extends JFrame {
                                 musicSyncer.initiate();
                             } catch (InterruptedException e) {
                                 SimpleAttributeSet attr = new SimpleAttributeSet();
-                                StyleConstants.setForeground(attr, Color.BLUE);
+                                StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
                                 writeStatusMessage("Execution was stopped.", attr);
                             } finally {
                                 // Restore everything to its default value.
@@ -282,7 +282,7 @@ public class UI extends JFrame {
                                 dstBrowseButton.setEnabled(true);
                             }
                             SimpleAttributeSet attr = new SimpleAttributeSet();
-                            StyleConstants.setForeground(attr, Color.BLUE);
+                            StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
                             writeStatusMessage("Finished. Time taken: " + 
                                     (System.currentTimeMillis() - timeStart) + " ms.", attr);
                         }
@@ -394,7 +394,7 @@ public class UI extends JFrame {
                 }
             } catch (FileNotFoundException e) {
                 SimpleAttributeSet attr = new SimpleAttributeSet();
-                StyleConstants.setForeground(attr, Color.BLUE);
+                StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
                 writeStatusMessage("No previous settings were found.", attr);
             } catch (IOException e) {
                 System.err.println("Error when loading settings: " + e.getMessage());
@@ -405,8 +405,9 @@ public class UI extends JFrame {
     }
 
     /**
-     * Write messages to the UI for the user to see.
-     * Only package visible to avoid calls from, for instance, the test package.
+     * Write messages to the UI for the user to see. Only package visible to
+     * avoid calls from, for instance, the test package.
+     * 
      * @param message
      * @param attributeSet
      */
@@ -433,12 +434,12 @@ public class UI extends JFrame {
         JScrollBar scrollBar = centerPanel.getVerticalScrollBar();
         final int min = scrollBar.getValue() + scrollBar.getVisibleAmount();
         final int max = scrollBar.getMaximum();
-        System.out.println(min + " " + max);
         return min == max;
     }
 
-    private static void scrollToBottom() {
-        SwingUtilities.invokeLater(new Runnable() {
+    private static void scrollToBottom() { 
+        EventQueue.invokeLater(new Runnable() {
+            @Override
             public void run() {
                 centerPanel.getVerticalScrollBar().setValue(
                     centerPanel.getVerticalScrollBar().getMaximum());
