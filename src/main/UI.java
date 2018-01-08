@@ -1,6 +1,9 @@
 package main;
+import java.awt.AWTException;
 import java.awt.BorderLayout;
 import java.awt.EventQueue;
+import java.awt.MouseInfo;
+import java.awt.Robot;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
@@ -73,6 +76,7 @@ public class UI extends JFrame {
     private int windowWidth = -1;
     private final String windowHeightAttr;
     private int windowHeight = -1;
+    private static Robot robotKeepPCAwake;
 
     /**
      * Launch the application.
@@ -82,8 +86,8 @@ public class UI extends JFrame {
             @Override
             public void run() {
                 //try {
-                    UI frame = new UI();
-                    frame.setVisible(true);
+                UI frame = new UI();
+                frame.setVisible(true);
                 //} catch (Exception e) {
                 //    System.err.println("FATAL: " + e + ": " + e.getMessage());
                 //}
@@ -96,7 +100,7 @@ public class UI extends JFrame {
      */
     public UI() {
         final boolean IS_FCFS = true;
-        // Load MLMS_Settings.txt if available.
+        // Avoid race conditions between MusicSyncer and UI accessing progressBarValue.
         readProgressSemaphore = new Semaphore(-1, IS_FCFS);
         // For reading the settings correctly
         srcFolderAttr = "srcFolder=";
@@ -115,11 +119,11 @@ public class UI extends JFrame {
         windowHeightAttr = "windowHeight=";
         setTitle("Music Library Mobile Syncer");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        // Load MLMS_Settings.txt if available.
         String[] arrayOfSettings = tryToLoadPreviousSettings();
         if (windowX > -1) {
             setBounds(windowX, windowY, windowWidth, windowHeight);
-        } else {
-            // Default values
+        } else { // Default values
             setBounds(100, 100, 450, 300);
         }
         
@@ -171,6 +175,7 @@ public class UI extends JFrame {
         dirChooser = new DirectoryChooser();
         JButton srcBrowseButton = new JButton("Browse...");
         srcBrowseButton.addActionListener(new ActionListener() {
+            @Override
             public void actionPerformed(ActionEvent e) {
                 String srcFolderString = "";
                 try {
@@ -189,6 +194,7 @@ public class UI extends JFrame {
         
         JButton dstBrowseButton = new JButton("Browse...");
         dstBrowseButton.addActionListener(new ActionListener() {
+            @Override
             public void actionPerformed(ActionEvent e) {
                 String dstFolderString = "";
                 try {
@@ -231,6 +237,7 @@ public class UI extends JFrame {
             private Thread musicSyncerThread;
             private Thread progressBarThread;
 
+            @Override
             public void actionPerformed(ActionEvent arg0) {
                 // Stop execution if the button was pressed while it was running.
                 if (startButton.getText().equals("Stop!")) {
@@ -337,6 +344,14 @@ public class UI extends JFrame {
                 }
             }
         }));
+        
+        try {
+            robotKeepPCAwake = new Robot();
+        } catch (AWTException e) {
+            System.err.println("FATAL: Could not create a robot for keeping the computer awake "
+                    + "while syncing. Your platform does not allow low-level input control.");
+        }
+        robotKeepPCAwake.setAutoDelay(0);
     }
     
     /**
@@ -346,12 +361,15 @@ public class UI extends JFrame {
      * @param increment
      *            the value to increment the progress bar's value by.
      */
-    public static void updateProgressBar(int increment) {
+    public static void updateProgressBar(final int increment) {
+    	// Move mouse to same location, effectively keeping the PC awake.
+    	robotKeepPCAwake.mouseMove(MouseInfo.getPointerInfo().getLocation().x,
+    			MouseInfo.getPointerInfo().getLocation().y);
         readProgressSemaphore.release();
         progressBarValue += increment;
     }
     
-    public static void setMaximumLimitOnProgressBar(int max) {
+    public static void setMaximumLimitOnProgressBar(final int max) {
         progressBar.setMaximum(max);
     }
     
