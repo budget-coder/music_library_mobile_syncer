@@ -1,4 +1,5 @@
 package main;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -75,7 +76,8 @@ public class MusicSyncer {
      */
     public void initiate() throws InterruptedException {
         if (srcFolder.isDirectory() && dstFolder.isDirectory()) {
-            DoubleWrapper<List<File>, List<File>> tuppleModifiedNewMusic = buildMusicListToSyncAndDeleteOldFiles(srcFolder);
+            DoubleWrapper<List<File>, List<File>> tuppleModifiedNewMusic =
+                    buildMusicListToSyncAndDeleteOldFiles(srcFolder);
             updateMetaData(srcFolder, tuppleModifiedNewMusic.getArg1(), tuppleModifiedNewMusic.getArg2());
             addNewMusicList(srcFolder, tuppleModifiedNewMusic.getArg2());
         } else {
@@ -85,8 +87,8 @@ public class MusicSyncer {
     }
 
     /**
-     * This method builds a list of music which has been modified since last
-     * sync session. Note that this means that if the program cannot find a
+     * This method builds a list of music which have been modified since last
+     * sync session. Note that this means if the program cannot find a
      * previous session file, ALL music will be marked as modified until the
      * metadata is examined closely.
      * 
@@ -96,25 +98,24 @@ public class MusicSyncer {
      *         list of new music.
      * @throws InterruptedException
      */
-    public DoubleWrapper<List<File>, List<File>> buildMusicListToSyncAndDeleteOldFiles(File currentSrcFolder) throws InterruptedException {
+    public DoubleWrapper<List<File>, List<File>> buildMusicListToSyncAndDeleteOldFiles(File currentSrcFolder)
+            throws InterruptedException {
         final File[] listOfSrc = srcFolder.listFiles();
         final File[] listOfDst = dstFolder.listFiles();
         // TODO This call here is useless when it comes to nested folders...
         UI.setMaximumLimitOnProgressBar((listOfSrc.length + listOfDst.length));
-        // A list with only the modified music.
-        final List<File> sortedListOfSrc = new ArrayList<>();
-        // A list with only the music to be added.
-        final List<File> listOfNewMusic = new ArrayList<>();
+        final List<File> sortedListOfSrc = new ArrayList<>(); // A list with only the modified music.
+        final List<File> listOfNewMusic = new ArrayList<>(); // A list with only the music to be added.
         final StringBuilder currentSession = new StringBuilder();
         final List<DoubleWrapper<String, Long>> lastSession = tryToLoadPreviousSession();
         
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
         UI.writeStatusMessage("List of src and dst folders completed.", attr);
         // Before we begin, we might want to check if there is any orphaned
-        // music that we can get rid of to avoid extra comparisons.
+        // music which we can get rid of to avoid extra comparisons.
         if (optionDeleteOrphanedMusic) {
             UI.writeStatusMessage("Locating orphaned music...", attr);
-            String folderSrcPath = currentSrcFolder.getAbsolutePath();
+            final String folderSrcPath = currentSrcFolder.getAbsolutePath();
             lookForAndDeleteOrphanedMusicInDst(listOfDst, folderSrcPath);
         }
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
@@ -125,8 +126,7 @@ public class MusicSyncer {
          * amount described in the file.
          */
         int lastSessionIndex = 0;
-        // The algorithm
-        for (int i = 0; i < listOfSrc.length; i++) {
+        for (int i = 0; i < listOfSrc.length; i++) { // The algorithm
             if (Thread.currentThread().isInterrupted()) {
                 throw new InterruptedException();
             }
@@ -135,7 +135,7 @@ public class MusicSyncer {
                 // If a folder was found, and the user wants it, then search it.
                 // TODO Will not be tested with the current directory
                 System.out.println("Recursing through folder; THIS SHOULD NOT HAPPEN (FOR NOW)");
-                // Take a backup of the current location, recurse the folder, and restore the original folder when done.
+                // Take a backup of the current location, recurse the folder, and then restore the original folder.
                 File currentSrcFolderCopy = currentSrcFolder;
                 currentSrcFolder = fileEntrySrc;
                 buildMusicListToSyncAndDeleteOldFiles(currentSrcFolder);
@@ -144,9 +144,9 @@ public class MusicSyncer {
             }
             // Get file name and extension, if any.
             final String strFile = fileEntrySrc.getName();
-            final int fileExtIndex = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
+            final int fileExtIndex = strFile.lastIndexOf("."); // If no extension, this will default to -1.
             final String strExt = strFile.substring(fileExtIndex + 1); 
-            // We use MurmurHash3 on the file size to get a unique hash value to compare with.
+            // We use MurmurHash3 on the file itself to get a unique hash to compare with.
             byte[] fileEntrySrcBytes = null;
             try {
                 fileEntrySrcBytes = Files.readAllBytes(fileEntrySrc.toPath());
@@ -175,7 +175,8 @@ public class MusicSyncer {
                          * absolutely sure that it is not further down the last
                          * session file.
                          */
-                        DoubleWrapper<Boolean, Long> locateFileWrapper = tryToLocateFileInPreviouSession(lastSession, lastSessionIndex, strFile);
+                        DoubleWrapper<Boolean, Long> locateFileWrapper =
+                                tryToLocateFileInPreviouSession(lastSession, lastSessionIndex, strFile);
                         wasFileLocated = locateFileWrapper.getArg1();
                         hasBeenModified = locateFileWrapper.getArg2() != fileHash;
                     } else {
@@ -214,7 +215,8 @@ public class MusicSyncer {
         // When all is finished and done, save the list of music to a .txt file (will overwrite existing).
         try {
             Paths.get("MLMS_LastSession.txt").toFile().setWritable(true);
-            Files.write(Paths.get("MLMS_LastSession.txt"), Arrays.asList(currentSession.toString()), Charset.forName("UTF-8"));
+            Files.write(Paths.get("MLMS_LastSession.txt"),
+                        Arrays.asList(currentSession.toString()), Charset.forName("UTF-8"));
             Paths.get("MLMS_LastSession.txt").toFile().setWritable(false);
         } catch (IOException e) {
             System.err.println("FATAL: Could not save a list of the music to a .txt file!");
@@ -234,7 +236,8 @@ public class MusicSyncer {
      *            a list of new music to be directly copied from src to dst.
      * @throws InterruptedException
      */
-    public void updateMetaData(File currentSrcFolder, List<File> sortedListOfSrc, List<File> listOfNewMusic) throws InterruptedException {
+    public void updateMetaData(File currentSrcFolder, List<File> sortedListOfSrc, List<File> listOfNewMusic)
+            throws InterruptedException {
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
         UI.writeStatusMessage("Updating metadata...", attr);
         
@@ -463,20 +466,20 @@ public class MusicSyncer {
      * @throws InterruptedException
      */
     public void addNewMusicList(File currentSrcFolder, List<File> listOfNewMusic) throws InterruptedException {
+        StyleConstants.setForeground(attr, DataClass.NEW_MUSIC_COLOR);
         for (final File newMusic : listOfNewMusic) {
             if (Thread.currentThread().isInterrupted()) {
                 throw new InterruptedException();
             }
             String strFile = newMusic.getName();
-            //Path targetPath = dstFolder.toPath().resolve(currentSrcFolder.toPath().relativize(currentSrcFolder.toPath()));
             Path targetPath = dstFolder.toPath().resolve(strFile);
             try {
                 Files.copy(newMusic.toPath(), targetPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
-                StyleConstants.setForeground(attr, DataClass.NEW_MUSIC_COLOR);
                 UI.writeStatusMessage("Added " + strFile + ".", attr);
             } catch (IOException e) {
                 StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
-                UI.writeStatusMessage("FATAL: Could not copy " + strFile + " to destination." + newMusic.toPath() + " and " + targetPath, attr);
+                UI.writeStatusMessage("FATAL: Could not copy " + strFile + " to destination."
+                + newMusic.toPath() + " and " + targetPath, attr);
                 e.printStackTrace();
             }
             UI.updateProgressBar(2);
@@ -577,7 +580,7 @@ public class MusicSyncer {
      * @param fileLastMod
      *            the last modified date of the file.
      */
-    public void updateCurrentSession(StringBuilder currentSession, String strFile, long fileLastMod) {
+    private void updateCurrentSession(StringBuilder currentSession, String strFile, long fileLastMod) {
         currentSession.append(strFile + "\n");
         currentSession.append(fileLastMod + "\n");
     }
