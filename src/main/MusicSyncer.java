@@ -34,6 +34,8 @@ import org.jaudiotagger.tag.images.Artwork;
 
 import data.DataClass;
 import data.DoubleWrapper;
+import filesystem.PCDeviceStrategy;
+import framework.StateDeviceStrategy;
 import util.MurmurHash3;
 
 public class MusicSyncer {
@@ -43,6 +45,7 @@ public class MusicSyncer {
     private boolean optionDeleteOrphanedMusic;
     private boolean optionSearchInSubdirectories;
     private final SimpleAttributeSet attr;
+    private final StateDeviceStrategy deviceStrategy;
     /**
      * We want to make a list of keys to avoid duplication and reduce the
      * likelihood of the programmer forgetting to check for a key. This list
@@ -50,14 +53,19 @@ public class MusicSyncer {
      */
     private final List<FieldKey> listOfFieldKeys;
     
-    public MusicSyncer(String strSrcFolder, String strDstFolder) {
-        srcFolder = new File(strSrcFolder.replace('\\', '/'));
-        dstFolder = new File(strDstFolder.replace("\\", "/"));
+    public MusicSyncer(String srcFolderStr, String dstFolderStr) {
+    	srcFolderStr = srcFolderStr.replace('\\', '/');
+    	dstFolderStr = dstFolderStr.replace('\\', '/');
+        srcFolder = new File(srcFolderStr);
+        dstFolder = new File(dstFolderStr);
         // Options are false by default.
         optionAddNewMusic = false;
         optionDeleteOrphanedMusic = false;
         optionSearchInSubdirectories = false;
-        
+        optionSearchInSubdirectories = false;
+		deviceStrategy = new SwitchBetweenDevicesStrategy(
+				null, // TODO Replace with implementation of mtp strategy
+				new PCDeviceStrategy(srcFolder, dstFolder));
         attr = new SimpleAttributeSet();
         listOfFieldKeys = Collections.unmodifiableList(Arrays.asList(
                 FieldKey.TITLE, FieldKey.ARTIST,
@@ -82,7 +90,7 @@ public class MusicSyncer {
             addNewMusicList(srcFolder, tuppleModifiedNewMusic.getArg2());
         } else {
             StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
-            UI.writeStatusMessage("ERROR: The source/target folder is not a folder or does not exist.", attr);
+            UI.writeStatusMsg("ERROR: The source/target folder is not a folder or does not exist.", attr);
         }
     }
 
@@ -90,7 +98,7 @@ public class MusicSyncer {
      * This method builds a list of music which have been modified since last
      * sync session. Note that this means if the program cannot find a
      * previous session file, ALL music will be marked as modified until the
-     * metadata is examined closely.
+     * metadata is closely examined.
      * 
      * @param currentSrcFolder
      *            the current source folder. Used to handle nested folders.
@@ -107,19 +115,19 @@ public class MusicSyncer {
         final List<File> sortedListOfSrc = new ArrayList<>(); // A list with only the modified music.
         final List<File> listOfNewMusic = new ArrayList<>(); // A list with only the music to be added.
         final StringBuilder currentSession = new StringBuilder();
-        final List<DoubleWrapper<String, Long>> lastSession = tryToLoadPreviousSession();
+        final List<DoubleWrapper<String, Integer>> lastSession = tryToLoadPreviousSession();
         
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
-        UI.writeStatusMessage("List of src and dst folders completed.", attr);
+        UI.writeStatusMsg("List of src and dst folders completed.", attr);
         // Before we begin, we might want to check if there is any orphaned
         // music which we can get rid of to avoid extra comparisons.
         if (optionDeleteOrphanedMusic) {
-            UI.writeStatusMessage("Locating orphaned music...", attr);
+            UI.writeStatusMsg("Locating orphaned music...", attr);
             final String folderSrcPath = currentSrcFolder.getAbsolutePath();
             lookForAndDeleteOrphanedMusicInDst(listOfDst, folderSrcPath);
         }
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
-        UI.writeStatusMessage("Finding files in src which have been updated since last session...", attr);
+        UI.writeStatusMsg("Finding files in src which have been updated since last session...", attr);
         /*
          * We use a separate index for the last session file because we cannot
          * guarantee that the amount of music in the source folder equals the
@@ -167,7 +175,7 @@ public class MusicSyncer {
                 boolean wasFileLocated = false;
                 if (lastSessionIndex < lastSession.size()) {
                     final boolean isSameFile = lastSession.get(lastSessionIndex).getArg1().equals(strFile);
-                    hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileHash;
+                    hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileHash; // TODO Move to else {}?
                     // We assume that, for the most part, most music is unchanged from last session.
                     if (!isSameFile) {
                         /*
@@ -175,7 +183,7 @@ public class MusicSyncer {
                          * absolutely sure that it is not further down the last
                          * session file.
                          */
-                        DoubleWrapper<Boolean, Long> locateFileWrapper =
+                        DoubleWrapper<Boolean, Integer> locateFileWrapper =
                                 tryToLocateFileInPreviouSession(lastSession, lastSessionIndex, strFile);
                         wasFileLocated = locateFileWrapper.getArg1();
                         hasBeenModified = locateFileWrapper.getArg2() != fileHash;
@@ -239,7 +247,7 @@ public class MusicSyncer {
     public void updateMetaData(File currentSrcFolder, List<File> sortedListOfSrc, List<File> listOfNewMusic)
             throws InterruptedException {
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
-        UI.writeStatusMessage("Updating metadata...", attr);
+        UI.writeStatusMsg("Updating metadata...", attr);
         
         for (final File fileEntrySorted : sortedListOfSrc) {
             if (Thread.currentThread().isInterrupted()) {
@@ -248,20 +256,23 @@ public class MusicSyncer {
             final String strFile = fileEntrySorted.getName();
             final int index = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
             final String strExt = strFile.substring(index + 1);
+            boolean isMP3 = strExt.toUpperCase().equals("MP3") ? true : false; 
+            File mpXInDst = new File(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
             try {
-                boolean isMP3;
-                switch (strExt.toUpperCase()) {
-                case "MP3":
-                    isMP3 = true;
-                case "M4A":
-                    // M4A are structurally the same as MP4 files.
-                    isMP3 = false;
-                    File mpXInDst = new File(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
-                    updateMusicMetaData(fileEntrySorted, mpXInDst, listOfNewMusic, isMP3);
-                    break;
-                default:
-                    break; // This was not music
-                }
+                // TODO should fix the error below with isMP3 == false always. Check by changing year.
+                updateMusicMetaData(fileEntrySorted, mpXInDst, listOfNewMusic, isMP3);
+                //switch (strExt.toUpperCase()) {
+                //case "MP3":
+                //    isMP3 = true;
+                //case "M4A":
+                //    // M4A are structurally the same as MP4 files.
+                //    isMP3 = false;
+                //    File mpXInDst = new File(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
+                //    updateMusicMetaData(fileEntrySorted, mpXInDst, listOfNewMusic, isMP3);
+                //    break;
+                //default:
+                //    break; // This was not music
+                //}
             } catch (InvalidAudioFrameException | CannotReadException
                     | IOException | TagException | ReadOnlyFileException
                     | CannotWriteException | ClassCastException e) {
@@ -284,21 +295,20 @@ public class MusicSyncer {
      * @return a tuple containing a boolean for whether the file was found and
      *         its last modified date. If it was not found, then the date is 0.
      */
-    public DoubleWrapper<Boolean, Long> tryToLocateFileInPreviouSession(
-            List<DoubleWrapper<String, Long>> lastSession, int lastSessionIndex,
+    public DoubleWrapper<Boolean, Integer> tryToLocateFileInPreviouSession(
+            List<DoubleWrapper<String, Integer>> lastSession, int lastSessionIndex,
             String strFile) {
         boolean isOutOfBound = lastSession.size() < lastSessionIndex || lastSessionIndex < 0;
         boolean isPreceedingCurrentFile = false;
         boolean isFollowingCurrentFile = false;
         boolean wasFileLocated = false;
         do {
-            int currentFileComparedToPreviousVersion = lastSession.get(lastSessionIndex).getArg1().compareTo(strFile);
+			int currentFileComparedToPreviousVersion = lastSession.get(lastSessionIndex).getArg1().compareTo(strFile);
             if (currentFileComparedToPreviousVersion < 0) {
                 // We are too low behind in our session list.
                 if (isFollowingCurrentFile) {
-                    // The previous session did not contain the
-                    // current file; in the previous iteration, the
-                    // index was decremented.
+					// The previous session did not contain the current file; in the previous
+					// iteration, the index was decremented.
                     break;
                 }
                 isPreceedingCurrentFile = true;
@@ -306,7 +316,7 @@ public class MusicSyncer {
             } else if (currentFileComparedToPreviousVersion > 0) {
                 // We are too far ahead in our session list.
                 if (isPreceedingCurrentFile) {
-                    // Same conclusion for the opposite reason; previously, the index was incremented. 
+					// Same conclusion for the opposite reason; before, the index was incremented. 
                     break;
                 }
                 isFollowingCurrentFile = true;
@@ -318,9 +328,9 @@ public class MusicSyncer {
             isOutOfBound = lastSessionIndex >= lastSession.size() || lastSessionIndex < 0;
         } while (!isOutOfBound && !wasFileLocated);
         if (!isOutOfBound) {
-            return new DoubleWrapper<Boolean, Long>(wasFileLocated, lastSession.get(lastSessionIndex).getArg2());
+            return new DoubleWrapper<Boolean, Integer>(wasFileLocated, lastSession.get(lastSessionIndex).getArg2());
         }
-        return new DoubleWrapper<Boolean, Long>(wasFileLocated, 0L);
+        return new DoubleWrapper<Boolean, Integer>(wasFileLocated, 0);
     }
     
     /**
@@ -371,8 +381,7 @@ public class MusicSyncer {
         /*
          * Before getting every relevant metadata, we check the length of both
          * music files. If the mod. version is not the same, then the music data
-         * has been modified. We can do nothing about that so we just replace it
-         * and return.
+         * has been modified. The only fix is to replace and return.
          */
         String musicLengthSrc = musicTagSrc.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH);
         String musicLengthDst = musicTagDst.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH);
@@ -386,7 +395,7 @@ public class MusicSyncer {
         for (FieldKey fieldKey : listOfFieldKeys) {
             // TODO Ugh, duplication. Can this be done any smarter?
             if (isMP3) {
-                /*
+                /* TODO bug report to Paul Taylor, author of jaudiotagger
                  * getFirst(FieldKey key) does NOT give the right year; it
                  * should be "TYER" and not "TDRC". We get "TYER" by getting it
                  * from the frame ID3v23Frames.FRAME_ID_V3_TYER and this is done
@@ -454,7 +463,6 @@ public class MusicSyncer {
         musicDstWriter.commit();
         UI.updateProgressBar(2);
     }
-    
 
     /**
      * This method copies new music to {@link #dstFolder}.
@@ -474,11 +482,12 @@ public class MusicSyncer {
             String strFile = newMusic.getName();
             Path targetPath = dstFolder.toPath().resolve(strFile);
             try {
-                Files.copy(newMusic.toPath(), targetPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
-                UI.writeStatusMessage("Added " + strFile + ".", attr);
+                Files.copy(newMusic.toPath(), targetPath,
+                		StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+                UI.writeStatusMsg("Added " + strFile + ".", attr);
             } catch (IOException e) {
                 StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
-                UI.writeStatusMessage("FATAL: Could not copy " + strFile + " to destination."
+                UI.writeStatusMsg("FATAL: Could not copy " + strFile + " to destination."
                 + newMusic.toPath() + " and " + targetPath, attr);
                 e.printStackTrace();
             }
@@ -493,26 +502,26 @@ public class MusicSyncer {
      * 
      * @param listOfFolder
      *            a list of files in the specified folder
-     * @param pathOfFolder
+     * @param pathToFolder
      *            the path to the folder.
      * @throws InterruptedException 
      */
-    public void lookForAndDeleteOrphanedMusicInDst(File[] listOfFolder, String pathOfFolder) throws InterruptedException {
+    public void lookForAndDeleteOrphanedMusicInDst(File[] listOfFolder, String pathToFolder) throws InterruptedException {
         for (final File fileEntryDst : listOfFolder) {
             if (Thread.currentThread().isInterrupted()) {
                 throw new InterruptedException();
             }
-            File fileOnSrc = new File(pathOfFolder + "\\" + fileEntryDst.getName());
+            File fileOnSrc = new File(pathToFolder + "\\" + fileEntryDst.getName());
             if (fileOnSrc.exists()) {
                 continue;
             }
             if (fileEntryDst.delete()) {
                 StyleConstants.setForeground(attr, DataClass.DEL_MUSIC_COLOR);
-                UI.writeStatusMessage("Deleted " + fileEntryDst.getName(), attr);
+                UI.writeStatusMsg("Deleted " + fileEntryDst.getName(), attr);
                 UI.updateProgressBar(1);
             } else {
                 StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
-                UI.writeStatusMessage("Could not delete " + fileEntryDst.getName() + ".", attr);
+                UI.writeStatusMsg("Could not delete " + fileEntryDst.getName() + ".", attr);
             }
         }
     }
@@ -526,7 +535,7 @@ public class MusicSyncer {
      * @return a list containing the previous session. Otherwise, it is empty.
      * @throws InterruptedException
      */
-    public List<DoubleWrapper<String, Long>> tryToLoadPreviousSession() throws InterruptedException {
+    public List<DoubleWrapper<String, Integer>> tryToLoadPreviousSession() throws InterruptedException {
         File lastSession = new File("MLMS_LastSession.txt");
         // If the file does not exist, then create it for the future syncing.
         if (!lastSession.exists()) {
@@ -534,10 +543,10 @@ public class MusicSyncer {
                 lastSession.createNewFile();
             } catch (IOException e) {
                 StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
-                UI.writeStatusMessage("FATAL: Could not create a file to store the current list of music in!", attr);
+                UI.writeStatusMsg("FATAL: Could not create a file to store the current list of music in!", attr);
             }
         }
-        List<DoubleWrapper<String, Long>> lastSessionList = new ArrayList<>();
+        List<DoubleWrapper<String, Integer>> lastSessionList = new ArrayList<>();
         // Try-with-ressources to ensure that the stream is closed. Notice that
         // we do not just make a new instance of FileReader because it uses
         // Java's platform default encoding, and that is not always correct!
@@ -553,7 +562,7 @@ public class MusicSyncer {
                 line = br.readLine();
                 // To avoid NumberFormatException on empty lines.
                 if (line != null) {
-                    long lastMod = Long.parseLong(line);
+                    int lastMod = Integer.parseInt(line);
                     lastSessionList.add(new DoubleWrapper<>(name, lastMod));
                 }
                 line = br.readLine();
@@ -561,7 +570,7 @@ public class MusicSyncer {
         } catch (FileNotFoundException e) {
             SimpleAttributeSet attr = new SimpleAttributeSet();
             StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
-            UI.writeStatusMessage("No last sync session was found.", attr);
+            UI.writeStatusMsg("No last sync session was found.", attr);
         } catch (IOException e) {
             System.err.println("Error when loading last sync session: " + e.getMessage());
         }
@@ -596,4 +605,8 @@ public class MusicSyncer {
     public void setSearchInSubdirectories(boolean option) {
         optionSearchInSubdirectories = option;
     }
+
+	public void setUsePortableDevice(boolean option) {
+		deviceStrategy.setToPCOrDevice(option);
+	}
 }
