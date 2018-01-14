@@ -81,7 +81,7 @@ public class TestMusicSyncer {
     
     @Test
     public void shouldLoadPreviousSessionFile() {
-        List<DoubleWrapper<String, Long>> previousSessionList = new ArrayList<>();
+        List<DoubleWrapper<String, Integer>> previousSessionList = new ArrayList<>();
         if (PREVIOUS_SESSION.exists()) {
             try {
                 previousSessionList = musicSync.tryToLoadPreviousSession();
