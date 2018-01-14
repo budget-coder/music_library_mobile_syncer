@@ -68,6 +68,8 @@ public class UI extends JFrame {
     private final int deleteOrphanedIndex;
     private final String searchInSubdirectoriesAttr;
     private final int searchInSubdirectoriesIndex;
+    private final String usePortableDeviceAttr;
+    private final int usePortableDeviceIndex;
     private final String windowXAttr;
     private int windowX = -1;
     private final String windowYAttr;
@@ -113,6 +115,8 @@ public class UI extends JFrame {
         deleteOrphanedIndex = 3;
         searchInSubdirectoriesAttr = "searchInSubdirectories=";
         searchInSubdirectoriesIndex = 4;
+        usePortableDeviceAttr = "usePortableDevice=";
+        usePortableDeviceIndex = 5;
         windowXAttr = "windowX=";
         windowYAttr = "windowY=";
         windowWidthAttr = "windowWidth=";
@@ -215,18 +219,21 @@ public class UI extends JFrame {
         getContentPane().add(westPanel, BorderLayout.WEST);
         westPanel.setLayout(new BoxLayout(westPanel, BoxLayout.Y_AXIS));
         
-        JCheckBox addNewMusicCheckBox = new JCheckBox("Add new music");
+        JCheckBox addNewMusicChkBox = new JCheckBox("Add new music");
         // Load previous settings and only care about whether "true" was written correctly.
-        addNewMusicCheckBox.setSelected(Boolean.valueOf(arrayOfSettings[addNewMusicIndex]));
-        addNewMusicCheckBox.setForeground(DataClass.NEW_MUSIC_COLOR);
-        westPanel.add(addNewMusicCheckBox);
-        JCheckBox deleteOrphanedCheckBox = new JCheckBox("Delete orphaned music");
-        deleteOrphanedCheckBox.setSelected(Boolean.valueOf(arrayOfSettings[deleteOrphanedIndex]));
-        deleteOrphanedCheckBox.setForeground(DataClass.DEL_MUSIC_COLOR);
-        westPanel.add(deleteOrphanedCheckBox);
-        JCheckBox searchInSubdirectoriesCheckBox = new JCheckBox("Search in subdirectories");
-        searchInSubdirectoriesCheckBox.setSelected(Boolean.valueOf(arrayOfSettings[searchInSubdirectoriesIndex]));
-        westPanel.add(searchInSubdirectoriesCheckBox);
+        addNewMusicChkBox.setSelected(Boolean.valueOf(arrayOfSettings[addNewMusicIndex]));
+        addNewMusicChkBox.setForeground(DataClass.NEW_MUSIC_COLOR);
+        westPanel.add(addNewMusicChkBox);
+        JCheckBox deleteOrphanedChkBox = new JCheckBox("Delete orphaned music");
+        deleteOrphanedChkBox.setSelected(Boolean.valueOf(arrayOfSettings[deleteOrphanedIndex]));
+        deleteOrphanedChkBox.setForeground(DataClass.DEL_MUSIC_COLOR);
+        westPanel.add(deleteOrphanedChkBox);
+        JCheckBox searchInSubdirsChkBox = new JCheckBox("Search in subdirectories");
+        searchInSubdirsChkBox.setSelected(Boolean.valueOf(arrayOfSettings[searchInSubdirectoriesIndex]));
+        westPanel.add(searchInSubdirsChkBox);
+        JCheckBox usePortableDeviceChkBox = new JCheckBox("Use portable device");
+        usePortableDeviceChkBox.setSelected(Boolean.valueOf(arrayOfSettings[usePortableDeviceIndex]));
+        westPanel.add(usePortableDeviceChkBox);
         
         JPanel bottomPanel = new JPanel();
         getContentPane().add(bottomPanel, BorderLayout.SOUTH);
@@ -254,7 +261,8 @@ public class UI extends JFrame {
                     // It does not make sense to be able to change the dirs.
                     srcBrowseButton.setEnabled(false);
                     dstBrowseButton.setEnabled(false);
-                    // Start the progress bar. The if-clause is a safety measure in case MusicSyncer counted wrong.
+					// Start the progress bar. The if-clause is a safety measure in case MusicSyncer
+					// counted wrong.
                     if (progressBarThread != null && progressBarThread.isAlive()) {
                         progressBarThread.interrupt();
                     }
@@ -273,15 +281,16 @@ public class UI extends JFrame {
                         public void run() {
                             musicSyncer = new MusicSyncer(txtSrcDir.getText(), txtDstDir.getText());
                             // Include the state of the checkboxes.
-                            musicSyncer.setAddNewMusicOption(addNewMusicCheckBox.isSelected());
-                            musicSyncer.setDeleteOrphanedMusic(deleteOrphanedCheckBox.isSelected());
-                            musicSyncer.setSearchInSubdirectories(searchInSubdirectoriesCheckBox.isSelected());
+                            musicSyncer.setAddNewMusicOption(addNewMusicChkBox.isSelected());
+                            musicSyncer.setDeleteOrphanedMusic(deleteOrphanedChkBox.isSelected());
+                            musicSyncer.setSearchInSubdirectories(searchInSubdirsChkBox.isSelected());
+                            musicSyncer.setUsePortableDevice(usePortableDeviceChkBox.isSelected());
                             try {
                                 musicSyncer.initiate();
                             } catch (InterruptedException e) {
                                 SimpleAttributeSet attr = new SimpleAttributeSet();
                                 StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
-                                writeStatusMessage("Execution was stopped.", attr);
+                                writeStatusMsg("Execution was stopped.", attr);
                             } finally {
                                 // Restore everything to its default value.
                                 startButton.setText("Start!");
@@ -290,7 +299,7 @@ public class UI extends JFrame {
                             }
                             SimpleAttributeSet attr = new SimpleAttributeSet();
                             StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
-                            writeStatusMessage("Finished. Time taken: " + 
+                            writeStatusMsg("Finished. Time taken: " + 
                                     (System.currentTimeMillis() - timeStart) + " ms.", attr);
                         }
                     };
@@ -328,16 +337,18 @@ public class UI extends JFrame {
                     final List<String> settings = Arrays.asList(srcFolderAttr
                             + txtSrcDir.getText() + "\n" + dstFolderAttr
                             + txtDstDir.getText() + "\n" + addNewMusicAttr
-                            + addNewMusicCheckBox.isSelected() + "\n"
+                            + addNewMusicChkBox.isSelected() + "\n"
                             + deleteOrphanedAttr
-                            + deleteOrphanedCheckBox.isSelected() + "\n"
+                            + deleteOrphanedChkBox.isSelected() + "\n"
                             + searchInSubdirectoriesAttr
-                            + searchInSubdirectoriesCheckBox.isSelected() + "\n"
+                            + searchInSubdirsChkBox.isSelected() + "\n"
+                            + usePortableDeviceAttr
+                            + usePortableDeviceChkBox.isSelected() + "\n"
                             + windowXAttr + getX() + "\n"
                             + windowYAttr + getY() + "\n"
                             + windowWidthAttr + getWidth() + "\n"
                             + windowHeightAttr + getHeight() + "\n"
-                            );
+            		);
                     Files.write(Paths.get("MLMS_Settings.txt"), settings, Charset.forName("UTF-8"));
                 } catch (IOException e) {
                     System.err.println("ERROR: Could not save a list of the music to a .txt file!");
@@ -379,6 +390,7 @@ public class UI extends JFrame {
         String addNewMusic = "";
         String deleteOrphaned = "";
         String searchInSubdirectories = "";
+        String usePortableDevice = "";
         final String[] returnArray;
         File settings = new File("MLMS_Settings.txt");
         if (!settings.exists()) {
@@ -387,7 +399,6 @@ public class UI extends JFrame {
             // Try-with-ressources to ensure that the stream is closed.
             try (BufferedReader br = new BufferedReader(new FileReader(settings))) {
                 String line = br.readLine();
-    
                 while (line != null) {
                     if (line.startsWith(srcFolderAttr)) {
                         srcFolder = line.substring(srcFolderAttr.length());
@@ -399,6 +410,8 @@ public class UI extends JFrame {
                         deleteOrphaned = line.substring(deleteOrphanedAttr.length());
                     } else if (line.startsWith(searchInSubdirectoriesAttr)) {
                         searchInSubdirectories = line.substring(searchInSubdirectoriesAttr.length());
+                    } else if (line.startsWith(usePortableDeviceAttr)) {
+                        usePortableDevice = line.substring(usePortableDeviceAttr.length());
                     } else if (line.startsWith(windowXAttr)) {
                         windowX = Integer.parseInt(line.substring(windowXAttr.length()));
                     } else if (line.startsWith(windowYAttr)) {
@@ -413,11 +426,12 @@ public class UI extends JFrame {
             } catch (FileNotFoundException e) {
                 SimpleAttributeSet attr = new SimpleAttributeSet();
                 StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
-                writeStatusMessage("No previous settings were found.", attr);
+                writeStatusMsg("No previous settings were found.", attr);
             } catch (IOException e) {
                 System.err.println("Error when loading settings: " + e.getMessage());
             }
-            returnArray = new String[]{srcFolder, dstFolder, addNewMusic, deleteOrphaned, searchInSubdirectories};
+			returnArray = new String[] {srcFolder, dstFolder, addNewMusic, deleteOrphaned, searchInSubdirectories,
+					usePortableDevice};
         }
         return returnArray;
     }
@@ -429,11 +443,11 @@ public class UI extends JFrame {
      * @param message
      * @param attributeSet
      */
-    static void writeStatusMessage(String message, MutableAttributeSet attributeSet) {
+    static void writeStatusMsg(final String message, final MutableAttributeSet attributeSet) {
         try {
             statusTextDoc.insertString(statusTextDoc.getLength(), message + "\n", attributeSet);
         } catch (BadLocationException e) { // This should not happen
-            System.err.println("FATAL: Could not write status message because of an"
+            System.err.println("FATAL: Could not write status message because of an "
                     + "invalid position. The error message: " + e.getMessage());
         }
         // Implement auto-scroll unless the scroll bar is manually moved up.
