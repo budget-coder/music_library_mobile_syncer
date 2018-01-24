@@ -3,46 +3,51 @@ package filesystem;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.List;
 
 import framework.DeviceStrategy;
 import framework.FileWrapper;
 
 public class PCDeviceStrategy implements DeviceStrategy {
-	private final File srcFolder, dstFolder;
+	private final File dstFolder;
+	private final PCFile dstFolderPC;
 
-	public PCDeviceStrategy(File srcFolder, File dstFolder) {
-		this.srcFolder = srcFolder;
+	public PCDeviceStrategy(File dstFolder) {
 		this.dstFolder = dstFolder;
+		dstFolderPC = new PCFile(dstFolder);
 	}
 	
 	@Override
-	public List<FileWrapper> listSrcOrDstFiles(boolean isSrc) {
-		List<FileWrapper> returnList = new ArrayList<>();
-		if (isSrc) {
-			for (File file : srcFolder.listFiles()) {
-				returnList.add(new PCFile(file));
-			}
-		} else {
-			for (File file : dstFolder.listFiles()) {
-				returnList.add(new PCFile(file));
-			}
+	public boolean isDstADirectory() {
+		return dstFolder.isDirectory();
+	}
+	
+	@Override
+	public FileWrapper[] listDstFiles() {
+		final File[] dstFolderList = dstFolder.listFiles();
+		FileWrapper[] returnList = new FileWrapper[dstFolderList.length];
+		for (int i = 0; i < dstFolderList.length; i++) {
+			returnList[i] = new PCFile(dstFolderList[i]);
 		}
 		return returnList;
 	}
-
+	
 	@Override
-	public int getSizeOfSrcOrDstFolder(boolean isSrc) {
-		// TODO Auto-generated method stub
-		return 0;
+	public FileWrapper getDstFolder() {
+		return dstFolderPC;
+	}
+	
+	@Override
+	public FileWrapper getFileInstance(String path) {
+		return new PCFile(path);
 	}
 
 	@Override
-	public void copyMusic(String sourcePath, String targetPath) throws IOException {
-		Files.copy(Paths.get(sourcePath), Paths.get(targetPath),
+	public void copyMusicToDst(FileWrapper newMusic) throws IOException {
+		Path targetPath = Paths.get(dstFolder.getAbsolutePath()).resolve(newMusic.getName());
+		Files.copy(Paths.get(newMusic.getAbsolutePath()), targetPath,
 					StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
 	}
 }

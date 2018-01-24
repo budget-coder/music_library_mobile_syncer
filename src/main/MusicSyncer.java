@@ -35,12 +35,14 @@ import org.jaudiotagger.tag.images.Artwork;
 import data.DataClass;
 import data.DoubleWrapper;
 import filesystem.PCDeviceStrategy;
+import filesystem.PCFile;
+import framework.FileWrapper;
 import framework.StateDeviceStrategy;
 import util.MurmurHash3;
 
 public class MusicSyncer {
     private final File srcFolder;
-    private final File dstFolder;
+    private final FileWrapper dstFolder;
     private boolean optionAddNewMusic;
     private boolean optionDeleteOrphanedMusic;
     private boolean optionSearchInSubdirectories;
@@ -56,16 +58,16 @@ public class MusicSyncer {
     public MusicSyncer(String srcFolderStr, String dstFolderStr) {
     	srcFolderStr = srcFolderStr.replace('\\', '/');
     	dstFolderStr = dstFolderStr.replace('\\', '/');
-        srcFolder = new File(srcFolderStr);
-        dstFolder = new File(dstFolderStr);
+    	deviceStrategy = new SwitchBetweenDevicesStrategy(
+				null, // TODO Replace with implementation of mtp strategy
+				new PCDeviceStrategy(new File(dstFolderStr)));
+    	srcFolder = new File(srcFolderStr);
+    	dstFolder = deviceStrategy.getDstFolder();
         // Options are false by default.
         optionAddNewMusic = false;
         optionDeleteOrphanedMusic = false;
         optionSearchInSubdirectories = false;
         optionSearchInSubdirectories = false;
-		deviceStrategy = new SwitchBetweenDevicesStrategy(
-				null, // TODO Replace with implementation of mtp strategy
-				new PCDeviceStrategy(srcFolder, dstFolder));
         attr = new SimpleAttributeSet();
         listOfFieldKeys = Collections.unmodifiableList(Arrays.asList(
                 FieldKey.TITLE, FieldKey.ARTIST,
@@ -83,11 +85,11 @@ public class MusicSyncer {
      * @throws InterruptedException
      */
     public void initiate() throws InterruptedException {
-        if (srcFolder.isDirectory() && dstFolder.isDirectory()) {
-            DoubleWrapper<List<File>, List<File>> tuppleModifiedNewMusic =
-                    buildMusicListToSyncAndDeleteOldFiles(srcFolder);
-            updateMetaData(srcFolder, tuppleModifiedNewMusic.getArg1(), tuppleModifiedNewMusic.getArg2());
-            addNewMusicList(srcFolder, tuppleModifiedNewMusic.getArg2());
+        //if (srcFolder.isDirectory() && dstFolder.isDirectory()) {
+    	if (deviceStrategy.isDstADirectory()) {
+			DoubleWrapper<List<File>, List<FileWrapper>> tuppleModifiedNewMusic = buildMusicListToSync(srcFolder);
+            updateMetaData(tuppleModifiedNewMusic.getArg1(), tuppleModifiedNewMusic.getArg2());
+            addNewMusicList(tuppleModifiedNewMusic.getArg2());
         } else {
             StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
             UI.writeStatusMsg("ERROR: The source/target folder is not a folder or does not exist.", attr);
@@ -106,14 +108,14 @@ public class MusicSyncer {
      *         list of new music.
      * @throws InterruptedException
      */
-    public DoubleWrapper<List<File>, List<File>> buildMusicListToSyncAndDeleteOldFiles(File currentSrcFolder)
+    public DoubleWrapper<List<File>, List<FileWrapper>> buildMusicListToSync(File currentSrcFolder)
             throws InterruptedException {
-        final File[] listOfSrc = srcFolder.listFiles();
-        final File[] listOfDst = dstFolder.listFiles();
+    	final File[] listOfSrc = srcFolder.listFiles();
+    	final FileWrapper[] listOfDst = deviceStrategy.listDstFiles();
         // TODO This call here is useless when it comes to nested folders...
         UI.setMaximumLimitOnProgressBar((listOfSrc.length + listOfDst.length));
         final List<File> sortedListOfSrc = new ArrayList<>(); // A list with only the modified music.
-        final List<File> listOfNewMusic = new ArrayList<>(); // A list with only the music to be added.
+        final List<FileWrapper> listOfNewMusic = new ArrayList<>(); // A list with only the music to be added.
         final StringBuilder currentSession = new StringBuilder();
         final List<DoubleWrapper<String, Integer>> lastSession = tryToLoadPreviousSession();
         
@@ -146,7 +148,7 @@ public class MusicSyncer {
                 // Take a backup of the current location, recurse the folder, and then restore the original folder.
                 File currentSrcFolderCopy = currentSrcFolder;
                 currentSrcFolder = fileEntrySrc;
-                buildMusicListToSyncAndDeleteOldFiles(currentSrcFolder);
+                buildMusicListToSync(currentSrcFolder);
                 currentSrcFolder = currentSrcFolderCopy;
                 continue;
             }
@@ -200,18 +202,18 @@ public class MusicSyncer {
                     }
                 }
                 // Check if the music exists in dst.
-                File fileInDst = new File(dstFolder.getAbsolutePath() + "\\" + strFile);
+				FileWrapper fileInDst = deviceStrategy.getFileInstance(dstFolder.getAbsolutePath() + "\\" + strFile);
                 if (wasFileLocated && !hasBeenModified) {
                     UI.updateProgressBar(2);
                     continue;
-                } else if (optionAddNewMusic && !fileInDst.exists()) {
+                } else if (optionAddNewMusic && !fileInDst.doesFileExist()) {
                     /*
                      * If the option was checked, "mark" new music by adding
                      * them to a list whose contents will be added later. This
                      * should be the last operation in the whole program because
                      * it adds unnecessary comparisons (at minimum n-checks!).
                      */
-                    listOfNewMusic.add(fileEntrySrc);
+                    listOfNewMusic.add(deviceStrategy.getFileInstance(fileEntrySrc.getAbsolutePath()));
                 } else {
                     sortedListOfSrc.add(fileEntrySrc);
                 }
@@ -229,22 +231,20 @@ public class MusicSyncer {
         } catch (IOException e) {
             System.err.println("FATAL: Could not save a list of the music to a .txt file!");
         }
-        return new DoubleWrapper<List<File>, List<File>>(sortedListOfSrc, listOfNewMusic);
+        return new DoubleWrapper<List<File>, List<FileWrapper>>(sortedListOfSrc, listOfNewMusic);
     }
     
     /**
      * This method inspects the list of music given and examines the metadata,
      * updating it if necessary.
-     * 
-     * @param currentSrcFolder
-     *            the current source folder.
      * @param sortedListOfSrc
      *            a list of modified music to be examined.
      * @param listOfNewMusic
      *            a list of new music to be directly copied from src to dst.
+     * 
      * @throws InterruptedException
      */
-    public void updateMetaData(File currentSrcFolder, List<File> sortedListOfSrc, List<File> listOfNewMusic)
+    public void updateMetaData(List<File> sortedListOfSrc, List<FileWrapper> listOfNewMusic)
             throws InterruptedException {
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
         UI.writeStatusMsg("Updating metadata...", attr);
@@ -257,7 +257,7 @@ public class MusicSyncer {
             final int index = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
             final String strExt = strFile.substring(index + 1);
             boolean isMP3 = strExt.toUpperCase().equals("MP3") ? true : false; 
-            File mpXInDst = new File(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
+            FileWrapper mpXInDst = deviceStrategy.getFileInstance(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
             try {
                 // TODO should fix the error below with isMP3 == false always. Check by changing year.
                 updateMusicMetaData(fileEntrySorted, mpXInDst, listOfNewMusic, isMP3);
@@ -279,6 +279,7 @@ public class MusicSyncer {
                 // TODO Use a logger just like in hotciv/cave
                 System.err.println("FATAL: " + e.toString());
             }
+            UI.updateProgressBar(2);
         }
     }
 
@@ -357,7 +358,7 @@ public class MusicSyncer {
      */
     @SuppressWarnings("unchecked")
     public <MusicTag extends Tag> void updateMusicMetaData(File fileSrc,
-            File fileDst, List<File> listOfNewMusic, boolean isMP3)
+            FileWrapper fileDst, List<FileWrapper> listOfNewMusic, boolean isMP3)
             throws CannotReadException, IOException, TagException,
             ReadOnlyFileException, InvalidAudioFrameException,
             CannotWriteException, ClassCastException {
@@ -386,7 +387,7 @@ public class MusicSyncer {
         String musicLengthSrc = musicTagSrc.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH);
         String musicLengthDst = musicTagDst.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH);
         if (!musicLengthSrc.equals(musicLengthDst)) {
-            listOfNewMusic.add(fileSrc);
+            listOfNewMusic.add(deviceStrategy.getFileInstance(fileSrc.getAbsolutePath()));
             return;
         }
         // Get each relevant tag from src and dst version of the file and save
@@ -461,34 +462,29 @@ public class MusicSyncer {
         // Write the metadata once and for all.
         musicDstWriter.setTag(musicTagDst);
         musicDstWriter.commit();
-        UI.updateProgressBar(2);
+        //UI.updateProgressBar(2);
     }
 
-    /**
-     * This method copies new music to {@link #dstFolder}.
-     * 
-     * @param currentSrcFolder
-     *            the current source folder.
-     * @param listOfNewMusic
-     *            a list of new music to be added directly.
-     * @throws InterruptedException
-     */
-    public void addNewMusicList(File currentSrcFolder, List<File> listOfNewMusic) throws InterruptedException {
+	/**
+	 * This method copies new music to {@link #dstFolder}.
+	 * 
+	 * @param listOfNewMusic
+	 *            a list of new music to be added directly.
+	 * @throws InterruptedException
+	 */
+    public void addNewMusicList(List<FileWrapper> listOfNewMusic) throws InterruptedException {
         StyleConstants.setForeground(attr, DataClass.NEW_MUSIC_COLOR);
-        for (final File newMusic : listOfNewMusic) {
+        for (final FileWrapper newMusic : listOfNewMusic) {
             if (Thread.currentThread().isInterrupted()) {
                 throw new InterruptedException();
             }
             String strFile = newMusic.getName();
-            Path targetPath = dstFolder.toPath().resolve(strFile);
             try {
-                Files.copy(newMusic.toPath(), targetPath,
-                		StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+                deviceStrategy.copyMusicToDst(newMusic);
                 UI.writeStatusMsg("Added " + strFile + ".", attr);
             } catch (IOException e) {
                 StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
-                UI.writeStatusMsg("FATAL: Could not copy " + strFile + " to destination."
-                + newMusic.toPath() + " and " + targetPath, attr);
+                UI.writeStatusMsg("FATAL: Could not copy " + strFile + " to destination.", attr);
                 e.printStackTrace();
             }
             UI.updateProgressBar(2);
@@ -506,16 +502,16 @@ public class MusicSyncer {
      *            the path to the folder.
      * @throws InterruptedException 
      */
-    public void lookForAndDeleteOrphanedMusicInDst(File[] listOfFolder, String pathToFolder) throws InterruptedException {
-        for (final File fileEntryDst : listOfFolder) {
+    public void lookForAndDeleteOrphanedMusicInDst(FileWrapper[] listOfFolder, String pathToFolder) throws InterruptedException {
+        for (final FileWrapper fileEntryDst : listOfFolder) {
             if (Thread.currentThread().isInterrupted()) {
                 throw new InterruptedException();
             }
-            File fileOnSrc = new File(pathToFolder + "\\" + fileEntryDst.getName());
-            if (fileOnSrc.exists()) {
+			FileWrapper fileOnSrc = deviceStrategy.getFileInstance(pathToFolder + "\\" + fileEntryDst.getName());
+            if (fileOnSrc.doesFileExist()) {
                 continue;
             }
-            if (fileEntryDst.delete()) {
+            if (fileEntryDst.deleteFile()) {
                 StyleConstants.setForeground(attr, DataClass.DEL_MUSIC_COLOR);
                 UI.writeStatusMsg("Deleted " + fileEntryDst.getName(), attr);
                 UI.updateProgressBar(1);

@@ -1,7 +1,6 @@
 package main;
 
 import java.io.IOException;
-import java.util.List;
 
 import framework.DeviceStrategy;
 import framework.FileWrapper;
@@ -24,17 +23,12 @@ public class SwitchBetweenDevicesStrategy implements StateDeviceStrategy {
 	}
 
 	@Override
-	public List<FileWrapper> listSrcOrDstFiles(boolean isSrc) {
-		return currentState.listSrcOrDstFiles(isSrc);
+	public FileWrapper[] listDstFiles() {
+		return currentState.listDstFiles();
 	}
 
 	@Override
-	public int getSizeOfSrcOrDstFolder(boolean isSrc) {
-		return currentState.getSizeOfSrcOrDstFolder(isSrc);
-	}
-
-	@Override
-	public void copyMusic(String sourcePath, String targetPath) throws IOException {
-		currentState.copyMusic(sourcePath, targetPath);
+	public void copyMusicToDst(FileWrapper newMusic) throws IOException {
+		currentState.copyMusicToDst(newMusic);
 	}
 }

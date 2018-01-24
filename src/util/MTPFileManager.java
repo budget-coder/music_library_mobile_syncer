@@ -23,7 +23,7 @@ import jmtp.PortableDeviceToHostImpl32;
 public class MTPFileManager {
     //boolean debug = false;
     private PortableDevice device;
-
+    
     //public synchronized void openDevice(PortableDevice portableDevice) {
     public void openDevice(PortableDevice portableDevice) {
         device = portableDevice;
