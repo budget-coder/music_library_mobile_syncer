@@ -28,11 +28,13 @@ Tag mappings: https://picard.musicbrainz.org/docs/mappings/
 - ~~Have computer stay awake when it is synchronizing~~
 
 ## License <br/>
-MLMS is primarily distributed under the terms of GNU General Public License v3.0.
+MLMS is primarily distributed under the terms of GPL-3.0.
 
-See LICENSE for details.
+See [LICENSE](LICENSE) for details.
 
 ### Third party software <br/>
 This product includes software developed by Joel Costigliola, Pascal Schumacher (assertj) and Paul Taylor (jaudiotagger) among others.
 
-See LICENSE-THIRD-PARTY for details.
+In binary form, this product includes a revised version of [jmtpe](https://github.com/ultrah/jMTPe/) under the terms of GPL-3.0. You can find it in the [lib-core](lib-core/) folder under the name "[jMTPe.jar](lib-core/jMTPe.jar)".
+
+See [LICENSE-THIRD-PARTY](LICENSE-THIRD-PARTY) for details.
