@@ -7,9 +7,11 @@ Currently, there are two not-so-practical ways to launch the application:
 - Otherwise, you will have to go inside "src" and compile everything with the "javac" command. Then you launch "UI.class" without any arguments.
 
 ## Useful links <br/>
-Testing: http://joel-costigliola.github.io/assertj/assertj-core-quick-start.html <br/>
-Tag info: https://en.wikipedia.org/wiki/ID3 <br/>
-Tag mappings: https://picard.musicbrainz.org/docs/mappings/ <br/>
+Testing: http://joel-costigliola.github.io/assertj/assertj-core-quick-start.html
+
+Tag info: https://en.wikipedia.org/wiki/ID3
+
+Tag mappings: https://picard.musicbrainz.org/docs/mappings/
 
 ## To-Do List <br/>
 - ~~Add an ant and ivy script for auto-downloading the libraries.~~
@@ -27,8 +29,10 @@ Tag mappings: https://picard.musicbrainz.org/docs/mappings/ <br/>
 
 ## License <br/>
 MLMS is primarily distributed under the terms of GNU General Public License v3.0.
+
 See LICENSE for details.
 
 ### Third party software <br/>
 This product includes software developed by Joel Costigliola, Pascal Schumacher (assertj) and Paul Taylor (jaudiotagger) among others.
+
 See LICENSE-THIRD-PARTY for details.
