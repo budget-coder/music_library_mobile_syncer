@@ -31,4 +31,19 @@ public class SwitchBetweenDevicesStrategy implements StateDeviceStrategy {
 	public void copyMusicToDst(FileWrapper newMusic) throws IOException {
 		currentState.copyMusicToDst(newMusic);
 	}
+
+	@Override
+	public boolean isDstADirectory() {
+		return currentState.isDstADirectory();
+	}
+
+	@Override
+	public FileWrapper getDstFolder() {
+		return currentState.getDstFolder();
+	}
+
+	@Override
+	public FileWrapper getFileInstance(String path) {
+		return currentState.getFileInstance(path);
+	}
 }
