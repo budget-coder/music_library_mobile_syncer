@@ -24,9 +24,12 @@ public class MTPFileManager {
     //boolean debug = false;
     private PortableDevice device;
     
+    public MTPFileManager(PortableDevice portableDevice) {
+    	device = portableDevice;
+    }
+    
     //public synchronized void openDevice(PortableDevice portableDevice) {
-    public void openDevice(PortableDevice portableDevice) {
-        device = portableDevice;
+    public void openDevice() {
         device.open();
     }
 
