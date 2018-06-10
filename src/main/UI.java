@@ -6,6 +6,8 @@ import java.awt.MouseInfo;
 import java.awt.Robot;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -14,6 +16,7 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -42,6 +45,21 @@ import data.DataClass;
 import javafx.application.Platform;
 import javafx.embed.swing.JFXPanel;
 import javafx.stage.DirectoryChooser;
+import jmtp.DeviceAlreadyOpenedException;
+import jmtp.PortableDevice;
+import jmtp.PortableDeviceFolderObject;
+import jmtp.PortableDeviceStorageObject;
+import util.MTPUtil;
+import javax.swing.JPopupMenu;
+import java.awt.Component;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import javax.swing.JMenuItem;
+
+@FunctionalInterface
+interface dialogMethod {
+    public String browseDialog() throws InterruptedException, ExecutionException;
+}
 
 public class UI extends JFrame {
     /**
@@ -122,7 +140,7 @@ public class UI extends JFrame {
         windowWidthAttr = "windowWidth=";
         windowHeightAttr = "windowHeight=";
         setTitle("Music Library Mobile Syncer");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // Close application
         // Load MLMS_Settings.txt if available.
         String[] arrayOfSettings = tryToLoadPreviousSettings();
         if (windowX > -1) {
@@ -161,60 +179,7 @@ public class UI extends JFrame {
         }
         txtSrcDir.setColumns(10);
         txtDstDir.setColumns(10);
-
-        JPanel browsePanel = new JPanel();
-        topPanel.add(browsePanel);
-        browsePanel.setLayout(new BoxLayout(browsePanel, BoxLayout.Y_AXIS));
-        /*
-        // "Prettify" the FileChooser dialog.
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (ClassNotFoundException | InstantiationException
-                | IllegalAccessException
-                | UnsupportedLookAndFeelException e1) {
-            System.err.println("FATAL: Could not open the browse dialog. +
-                Please input the destination of source folder manually.");
-        } */
-        new JFXPanel(); // Initialize JavaFX thread when using its FileChooser (ideally called once)
-        dirChooser = new DirectoryChooser();
-        JButton srcBrowseButton = new JButton("Browse...");
-        srcBrowseButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String srcFolderString = "";
-                try {
-                    srcFolderString = browseDialog();
-                } catch (InterruptedException | ExecutionException ex) {
-                    System.err.println("FATAL: " + ex.getMessage());
-                } finally {
-                    // If the user did not choose a folder, then keep the current folder.
-                    if (!srcFolderString.equals("")) {
-                        txtSrcDir.setText(srcFolderString);
-                    }
-                }
-            }
-        });
-        browsePanel.add(srcBrowseButton);
-        
-        JButton dstBrowseButton = new JButton("Browse...");
-        dstBrowseButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String dstFolderString = "";
-                try {
-                    dstFolderString = browseDialog();
-                } catch (InterruptedException | ExecutionException ex) {
-                    System.err.println("FATAL: " + ex.getMessage());
-                } finally {
-                    // If the user did not choose a folder, then keep the current folder.
-                    if (!dstFolderString.equals("")) {
-                        txtDstDir.setText(dstFolderString);
-                    }
-                }
-            }
-        });
-        browsePanel.add(dstBrowseButton);
-        
+        // Initialize west panel with checkboxes
         JPanel westPanel = new JPanel();
         getContentPane().add(westPanel, BorderLayout.WEST);
         westPanel.setLayout(new BoxLayout(westPanel, BoxLayout.Y_AXIS));
@@ -234,6 +199,101 @@ public class UI extends JFrame {
         JCheckBox usePortableDeviceChkBox = new JCheckBox("Use portable device");
         usePortableDeviceChkBox.setSelected(Boolean.valueOf(arrayOfSettings[usePortableDeviceIndex]));
         westPanel.add(usePortableDeviceChkBox);
+        // Initialize browse panel
+        JPanel browsePanel = new JPanel();
+        topPanel.add(browsePanel);
+        browsePanel.setLayout(new BoxLayout(browsePanel, BoxLayout.Y_AXIS));
+        /*
+        // "Prettify" the FileChooser dialog.
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (ClassNotFoundException | InstantiationException
+                | IllegalAccessException
+                | UnsupportedLookAndFeelException e1) {
+            System.err.println("FATAL: Could not open the browse dialog. +
+                Please input the destination of source folder manually.");
+        } */
+        new JFXPanel(); // Initialize JavaFX thread when using its FileChooser (ideally called once)
+        dirChooser = new DirectoryChooser();
+        // Implement source browse button and its popup menu options
+        JButton srcBrowseButton = new JButton("Browse...");
+        browsePanel.add(srcBrowseButton);
+        
+        JPopupMenu popupMenuSrc = new JPopupMenu();
+        addPopup(srcBrowseButton, popupMenuSrc);
+        
+        JMenuItem mntmComputerSrc = new JMenuItem("Computer");
+        popupMenuSrc.add(mntmComputerSrc);
+        addBrowseDialog(mntmComputerSrc, txtSrcDir, this::browsePCDialog); // Java 8 lambda expression for passing a method!
+        /*
+        mntmComputerSrc.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String srcFolderString = "";
+                try {
+                    srcFolderString = browsePCDialog();
+                } catch (InterruptedException | ExecutionException ex) {
+                    System.err.println("FATAL: " + ex.getMessage());
+                } finally {
+                    // If the user did not choose a folder, then keep the current folder.
+                    if (!srcFolderString.equals("")) {
+                        txtSrcDir.setText(srcFolderString);
+                    }
+                }
+            }
+        });
+        */
+        
+        JMenuItem mntmMtpDeviceSrc = new JMenuItem("MTP Device");
+        popupMenuSrc.add(mntmMtpDeviceSrc);
+        addBrowseDialog(mntmMtpDeviceSrc, txtSrcDir, this::browseMTPDialog);
+        
+        // Implement target browse button and its popup menu options
+        JButton dstBrowseButton = new JButton("Browse...");
+        browsePanel.add(dstBrowseButton);
+        
+        JPopupMenu popupMenuDst = new JPopupMenu();
+        addPopup(dstBrowseButton, popupMenuDst);
+        
+        JMenuItem mntmComputerDst = new JMenuItem("Computer");
+        popupMenuDst.add(mntmComputerDst);
+        addBrowseDialog(mntmComputerDst, txtDstDir, this::browsePCDialog);
+        /*
+        mntmComputerDst.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String dstFolderString = "";
+                if (usePortableDeviceChkBox.isSelected()) {
+                	dstFolderString = browseMTPDialog();
+                    
+                	
+                	//////////////////////
+                	///////////////////
+                	/////////////////////
+                	///////////////////
+                	/////////////////////
+                	///////////////////////
+                	/////////////////////
+                	
+                } else {
+	                try {
+	                    dstFolderString = browsePCDialog();
+	                } catch (InterruptedException | ExecutionException ex) {
+	                    System.err.println("FATAL: " + ex.getMessage());
+	                } finally {
+	                    // If the user did not choose a folder, then keep the current folder.
+	                    if (!dstFolderString.equals("")) {
+	                        txtDstDir.setText(dstFolderString);
+	                    }
+	                }
+                }
+            }
+        });
+        */
+        
+        JMenuItem mntmMtpDeviceDst = new JMenuItem("MTP Device");
+        popupMenuDst.add(mntmMtpDeviceDst);
+        addBrowseDialog(mntmMtpDeviceDst, txtDstDir, this::browseMTPDialog);
         
         JPanel bottomPanel = new JPanel();
         getContentPane().add(bottomPanel, BorderLayout.SOUTH);
@@ -279,7 +339,7 @@ public class UI extends JFrame {
                     Runnable musicSyncerRunnable = new Runnable() {
                         @Override
                         public void run() {
-                            musicSyncer = new MusicSyncer(txtSrcDir.getText(), txtDstDir.getText());
+                            musicSyncer = new MusicSyncer(txtSrcDir.getText(), txtDstDir.getText(), null);
                             // Include the state of the checkboxes.
                             musicSyncer.setAddNewMusicOption(addNewMusicChkBox.isSelected());
                             musicSyncer.setDeleteOrphanedMusic(deleteOrphanedChkBox.isSelected());
@@ -364,8 +424,8 @@ public class UI extends JFrame {
         }
         robotKeepPCAwake.setAutoDelay(0);
     }
-    
-    /**
+
+	/**
      * Note that we do not want to make the MusicSyncer instance wait! Just
      * release immediately and continue!
      * 
@@ -479,6 +539,64 @@ public class UI extends JFrame {
         });
     }
     
+    private String browseMTPDialog() {
+    	PortableDevice[] devices = MTPUtil.getDevices();
+    	if (devices.length == 0) {
+    		return "";
+    	}
+    	// Now iterating the list of MTP devices.
+    	PortableDevice mtpDevice = devices[0];
+    	try {
+    		mtpDevice.open();
+    	} catch (DeviceAlreadyOpenedException e) { // Do nothing
+    	}
+    	
+    	UIForMTPFileSystem uiMTP = new UIForMTPFileSystem(mtpDevice);
+    	setVisible(false); // Hide the UI until the user has selected an MTP folder
+    	uiMTP.setVisible(true);
+    	uiMTP.addWindowListener(new WindowAdapter() {
+    		@Override
+			public void windowClosing(WindowEvent arg0) {
+    			setVisible(true); // Display the main menu again.
+    		}
+		});
+    	
+    	
+    	ArrayList<PortableDeviceStorageObject> deviceStorages = MTPUtil.getDeviceStorages(mtpDevice);
+    	// Now iterating the list of storages
+    	for (PortableDeviceStorageObject storage : deviceStorages) {
+            if (!storage.getName().equals("SD-kort")) {
+                continue;
+            }
+            PortableDeviceFolderObject dstFolderDevice =
+                    (PortableDeviceFolderObject) MTPUtil.getChildByName(storage, "MusicTEST");
+            dstFolderDevice = MTPUtil.getChildByName(dstFolderDevice, "DEEPER");
+            dstFolderDevice = MTPUtil.getChildByName(dstFolderDevice, "EVEN DEEPER");
+            if (dstFolderDevice != null) {
+	            String tempPath = "";
+				PortableDeviceFolderObject tempFolder = dstFolderDevice;
+				while (tempFolder != null) {
+					tempPath = tempFolder.getOriginalFileName() + "\\" + tempPath;
+					if (tempFolder.getParent() instanceof PortableDeviceFolderObject) {
+						tempFolder = (PortableDeviceFolderObject) tempFolder.getParent();
+					} else {
+						break;
+					}
+				}
+				tempPath = "Computer\\" + mtpDevice.getFriendlyName() + "\\" + storage.getName() + "\\" + tempPath.substring(0, tempPath.length()-1);
+				SimpleAttributeSet attr = new SimpleAttributeSet();
+		        StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
+				writeStatusMsg("MTP Path: " + tempPath, attr);
+            } else {
+            	SimpleAttributeSet attr = new SimpleAttributeSet();
+		        StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
+				writeStatusMsg("FOLDER NOT FOUND", attr);
+            }
+    	}
+    	
+		return ""; // TODO REPLACE
+    }
+    
     /**
      * Opens up a FileChooser dialog where you can open a file.
      * 
@@ -487,19 +605,7 @@ public class UI extends JFrame {
      * @throws InterruptedException
      * @throws ExecutionException
      */
-    private String browseDialog() throws InterruptedException, ExecutionException {
-        /* The old way with JFileChooser
-        final String returnString;
-        final int returnVal = jfc.showOpenDialog(UI.this);
-        if (returnVal == JFileChooser.APPROVE_OPTION) {
-            returnString = jfc.getSelectedFile().toString();
-        } else {
-            returnString = "";
-        }
-        
-        return returnString;
-        */
-        
+    private String browsePCDialog() throws InterruptedException, ExecutionException {
         /*
          * TODO Javadoc for this awesome code is needed. Source: http://stackoverflow.com/a/13804542
          */
@@ -519,7 +625,48 @@ public class UI extends JFrame {
             }
         });
         Platform.runLater(queryFolder);
-        // The following method is synchronous; it will block until queryFolder is done.
+        // The following call is synchronous; it will block until queryFolder is done.
         return queryFolder.get();
     }
+    
+    private void addBrowseDialog(JMenuItem component, JTextField txtField, dialogMethod dialog) {
+    	component.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String srcFolderString = "";
+                try {
+                    srcFolderString = dialog.browseDialog();
+                } catch (InterruptedException | ExecutionException ex) {
+                    System.err.println("FATAL: " + ex.getMessage());
+                } finally {
+                    // If the user did not choose a folder, then keep the current folder.
+                    if (!srcFolderString.equals("")) {
+                        txtSrcDir.setText(srcFolderString);
+                    }
+                }
+            }
+        });
+	}
+
+	/**
+	 * Add a pop-up menu to a component on left-click.
+	 * 
+	 * @param component
+	 *            a component (such as a JButton)
+	 * @param popup
+	 *            the JPopupmenu
+	 */
+	private static void addPopup(Component component, final JPopupMenu popup) {
+		component.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseReleased(MouseEvent e) {
+				if (!e.isPopupTrigger()) {
+					showMenu(e);
+				}
+			}
+			private void showMenu(MouseEvent e) {
+				popup.show(e.getComponent(), e.getX(), e.getY());
+			}
+		});
+	}
 }
