@@ -8,9 +8,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -34,10 +32,11 @@ import org.jaudiotagger.tag.images.Artwork;
 
 import data.DataClass;
 import data.DoubleWrapper;
+import filesystem.MTPDeviceStrategy;
 import filesystem.PCDeviceStrategy;
-import filesystem.PCFile;
 import framework.FileWrapper;
 import framework.StateDeviceStrategy;
+import jmtp.PortableDeviceStorageObject;
 import util.MurmurHash3;
 
 public class MusicSyncer {
@@ -55,12 +54,18 @@ public class MusicSyncer {
      */
     private final List<FieldKey> listOfFieldKeys;
     
-    public MusicSyncer(String srcFolderStr, String dstFolderStr) {
+    public MusicSyncer(String srcFolderStr, String dstFolderStr,
+    		PortableDeviceStorageObject dstMTPStorage) {
     	srcFolderStr = srcFolderStr.replace('\\', '/');
     	dstFolderStr = dstFolderStr.replace('\\', '/');
+    	// TODO So far, only the target can be an MTP device (notice the argument to the
+    	// strats). Should it be changed?
+    	
+    	
     	deviceStrategy = new SwitchBetweenDevicesStrategy(
-				null, // TODO Replace with implementation of mtp strategy
-				new PCDeviceStrategy(new File(dstFolderStr)));
+				new MTPDeviceStrategy(dstMTPStorage, dstFolderStr),
+				new PCDeviceStrategy(dstFolderStr));
+    	deviceStrategy.setToPCOrDevice(false); // Default value
     	srcFolder = new File(srcFolderStr);
     	dstFolder = deviceStrategy.getDstFolder();
         // Options are false by default.
@@ -69,11 +74,12 @@ public class MusicSyncer {
         optionSearchInSubdirectories = false;
         optionSearchInSubdirectories = false;
         attr = new SimpleAttributeSet();
+        // TODO DISC_NO disabled until it can be looked up on an MTP device 
         listOfFieldKeys = Collections.unmodifiableList(Arrays.asList(
                 FieldKey.TITLE, FieldKey.ARTIST,
                 FieldKey.ALBUM_ARTIST,
                 FieldKey.ALBUM, FieldKey.YEAR,
-                FieldKey.TRACK, FieldKey.DISC_NO,
+                FieldKey.TRACK, //FieldKey.DISC_NO,
                 FieldKey.GENRE, FieldKey.COMPOSER));
     }
     
@@ -317,14 +323,12 @@ public class MusicSyncer {
             } else if (currentFileComparedToPreviousVersion > 0) {
                 // We are too far ahead in our session list.
                 if (isPreceedingCurrentFile) {
-					// Same conclusion for the opposite reason; before, the index was incremented. 
-                    break;
+                    break; // Same conclusion for the opposite reason; before, the index was incremented.
                 }
                 isFollowingCurrentFile = true;
                 lastSessionIndex--;
             } else {
-                // Hoozah! We found the file.
-                wasFileLocated = true;
+                wasFileLocated = true; // Hoozah! We found the file.
             }
             isOutOfBound = lastSessionIndex >= lastSession.size() || lastSessionIndex < 0;
         } while (!isOutOfBound && !wasFileLocated);
@@ -370,13 +374,17 @@ public class MusicSyncer {
         MusicTag musicTagSrc;
         AudioFile musicDstWriter;
         MusicTag musicTagDst;
+        
         if (isMP3) {
             musicTagSrc = (MusicTag) ((MP3File) AudioFileIO.read(fileSrc)).getID3v2Tag();
-            musicDstWriter = AudioFileIO.read(fileDst);
+         // TODO TEMP. FIX TO MAKE IT WORK FOR PC ONLY BEFORE MTP IS IMPLEMENTED.
+            musicDstWriter = AudioFileIO.read(new File(fileDst.getAbsolutePath()));
+            //musicDstWriter = AudioFileIO.read(fileDst);
             musicTagDst = (MusicTag) ((MP3File) musicDstWriter).getID3v2Tag();
         } else {
             musicTagSrc = (MusicTag) AudioFileIO.read(fileSrc).getTag();
-            musicDstWriter = AudioFileIO.read(fileDst);
+         // TODO TEMP. FIX TO MAKE IT WORK FOR PC ONLY BEFORE MTP IS IMPLEMENTED.
+            musicDstWriter = AudioFileIO.read(new File(fileDst.getAbsolutePath()));
             musicTagDst = (MusicTag) musicDstWriter.getTag();
         }
         /*
