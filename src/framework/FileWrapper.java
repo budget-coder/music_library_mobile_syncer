@@ -6,6 +6,7 @@ public interface FileWrapper {
 	public boolean isDirectory();
 	public String getName();
 	public String getAbsolutePath();
+	public FileWrapper[] listFiles();
 	
 	public boolean deleteFile();
 	
