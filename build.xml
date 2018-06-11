@@ -30,6 +30,8 @@
   <property name="lib-core.dir" value="lib-core" />
   <property name="bin.dir" value="bin" />
 
+  <!-- Natives and resources (in future, add natives by pattern-matching) -->
+  <property name="jmtp-natives.dir" value="${lib-core.dir}/jmtp-natives" />
   <property name="resource.dir" value="resources" />
 
   <property name="javadoc.dir" value="javadoc" />
@@ -210,9 +212,15 @@
   <target name="gui" 
           depends="build.all"
           description="--> * Run the MLMS application.">
-    <java classpathref="run.path.id" 
-	  classname="main.UI"
-          fork="true">
-    </java>
+	<java classpathref="run.path.id" 
+	   classname="main.UI"
+	   fork="true">
+	   <!-- Add native libraries to path (fork MUST be "true"/"yes")
+			in order for System.loadLibrary(...) to work! -->
+	   <sysproperty
+	      key="java.library.path"
+		  value="${java.library.path};${jmtp-natives.dir}">
+	   </sysproperty>
+	</java>
   </target>
 </project>
