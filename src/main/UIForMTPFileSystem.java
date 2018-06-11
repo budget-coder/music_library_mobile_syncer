@@ -1,27 +1,26 @@
 package main;
 
 import java.awt.BorderLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import javax.swing.ImageIcon;
+import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTree;
 import javax.swing.border.EmptyBorder;
-import javax.swing.event.TreeSelectionEvent;
-import javax.swing.event.TreeSelectionListener;
-import javax.swing.event.TreeWillExpandListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.MutableTreeNode;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
@@ -33,18 +32,9 @@ import jmtp.PortableDeviceFolderObject;
 import jmtp.PortableDeviceObject;
 import jmtp.PortableDeviceStorageObject;
 import util.MTPUtil;
-import javax.swing.event.TreeExpansionListener;
-import javax.swing.event.TreeExpansionEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import javax.swing.JScrollPane;
 
-public class UIForMTPFileSystem extends JFrame {
-	/**
-	 * Serial user ID
-	 */
-	private static final long serialVersionUID = 5882386163684767108L;
-	private JPanel contentPane;
+public class UIForMTPFileSystem {
+	private JDialog frame;
 	private static final String BASE_PATH_ICONS = System.getProperty("user.dir") + "\\icons\\";
 	private static final ImageIcon ICON_DEVICE = new ImageIcon(BASE_PATH_ICONS + "device.png");
 	private static final ImageIcon ICON_STORAGE = new ImageIcon(BASE_PATH_ICONS + "storage.png");
@@ -54,37 +44,20 @@ public class UIForMTPFileSystem extends JFrame {
 	private List<Integer> nodeHashCodesList = new ArrayList<>();
 	private Map<TreePath, PortableDeviceStorageObject> pathStorageMap = new HashMap<>();
 	private Map<TreePath, PortableDeviceFolderObject> pathFolderMap = new HashMap<>();
-	
-	// TODO DELETE MAIN AFTER TESTING
-	/*
-	public static void main(String[] args) {
-		EventQueue.invokeLater(new Runnable() {
-			public void run() {
-				try {
-					UIForMTPFileSystem frame = new UIForMTPFileSystem(null);
-					frame.setVisible(true);
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-				
-			}
-		});
-	}
-	*/
-	
+	private String stringChosenFolder = ""; // Folder path.
 	
 	/**
 	 * Create the frame.
 	 */
-	public UIForMTPFileSystem(PortableDevice device) {
+	public UIForMTPFileSystem(PortableDevice device, JFrame parentFrame) {
+		frame = new JDialog(parentFrame, true);
 		// When closing, clean up WITHOUT exiting the whole application
-		setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-		setBounds(100, 100, 450, 400);
-		contentPane = new JPanel();
+		frame.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+		frame.setBounds(100, 100, 450, 400);
+		JPanel contentPane = new JPanel();
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		contentPane.setLayout(new BorderLayout(0, 0));
-		setContentPane(contentPane);
-		// Create the root node and pack it into a JTree. 
+		// Create the root node and pack it into a JTree.
 		DefaultMutableTreeNode top = new DefaultMutableTreeNode(
 				new IconData(ICON_DEVICE, null, device.getFriendlyName()));
 		JTree tree = new JTree(top);
@@ -106,8 +79,9 @@ public class UIForMTPFileSystem extends JFrame {
 		visitStorages(deviceStorages, tree);
 		// Specify a custom cell renderer for icons etc.
 		tree.setCellRenderer(new IconCellRenderer());
-		//contentPane.add(tree, BorderLayout.CENTER);
-		
+		// TODO Also scroll automatically upon expansion! The amount of scrolling is
+		// ALWAYS AT MOST the amount of new children. That is, still show the first
+		// child
 		JScrollPane scrollPane = new JScrollPane(tree);
 		contentPane.add(scrollPane, BorderLayout.CENTER);
 		// Attach a mouse listener which, when a node is double-clicked, displays its
@@ -129,23 +103,8 @@ public class UIForMTPFileSystem extends JFrame {
 				}
 			}
 		});
-		/*
-		tree.addTreeExpansionListener(new TreeExpansionListener() {
-			@Override
-			public void treeCollapsed(TreeExpansionEvent event) { // Do nothing
-			}
-			
-			@Override
-			public void treeExpanded(TreeExpansionEvent selectedNode) {
-				System.out.println("Expanding tree " + selectedNode.getPath());
-				if (!nodeHashCodesList.contains(selectedNode.getPath().hashCode())) {
-					nodeHashCodesList.add(selectedNode.getPath().hashCode());
-				}
-			}
-		});
-		*/
 		// Get path of selected folder before exiting
-		addWindowListener(new WindowAdapter() {
+		frame.addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosing(WindowEvent e) {
 				DefaultMutableTreeNode currNode = (DefaultMutableTreeNode) tree.getLastSelectedPathComponent();
@@ -159,9 +118,12 @@ public class UIForMTPFileSystem extends JFrame {
 				        }
 				    }
 					System.out.println("Path to selected node: " + currPath);
+					// Store the folder path in a field variable. 
+					stringChosenFolder = currPath;
 				}
 			}
 		});
+		frame.setContentPane(contentPane);
 	}
 
 	private void addChildToTree(IconData iconData, JTree tree, DefaultMutableTreeNode parentNode) {
@@ -263,5 +225,19 @@ public class UIForMTPFileSystem extends JFrame {
 			addChildToTree(new IconData(ICON_FOLDER, ICON_FOLDER_EXP, listOfFolders.get(j).getOriginalFileName()), tree,
 					parentNode);
 		}
+	}
+	
+	/**
+	 * Displays a dialog of a virtual file system representing the MTP devices.
+	 * <b>Blocks</b> until the dialog is closed.
+	 * 
+	 * @return the path of the chosen folder. If no folder was chosen, then the
+	 *         empty string is returned.
+	 */
+	public String showDialog() {
+		frame.setVisible(true); // This will block the current thread if frame is modal.
+		// Call ::setVisible on the Event-Dispatch thread.
+		// SwingUtilities.invokeLater(() -> frame.setVisible(true));
+		return stringChosenFolder;
 	}
 } // End class

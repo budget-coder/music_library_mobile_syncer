@@ -13,6 +13,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -34,6 +35,7 @@ import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
+import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultStyledDocument;
 import javax.swing.text.MutableAttributeSet;
@@ -55,6 +57,7 @@ import java.awt.Component;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 
 @FunctionalInterface
 interface dialogMethod {
@@ -105,12 +108,8 @@ public class UI extends JFrame {
         EventQueue.invokeLater(new Runnable() {
             @Override
             public void run() {
-                //try {
                 UI frame = new UI();
                 frame.setVisible(true);
-                //} catch (Exception e) {
-                //    System.err.println("FATAL: " + e + ": " + e.getMessage());
-                //}
             }
         });
     }
@@ -225,24 +224,6 @@ public class UI extends JFrame {
         JMenuItem mntmComputerSrc = new JMenuItem("Computer");
         popupMenuSrc.add(mntmComputerSrc);
         addBrowseDialog(mntmComputerSrc, txtSrcDir, this::browsePCDialog); // Java 8 lambda expression for passing a method!
-        /*
-        mntmComputerSrc.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String srcFolderString = "";
-                try {
-                    srcFolderString = browsePCDialog();
-                } catch (InterruptedException | ExecutionException ex) {
-                    System.err.println("FATAL: " + ex.getMessage());
-                } finally {
-                    // If the user did not choose a folder, then keep the current folder.
-                    if (!srcFolderString.equals("")) {
-                        txtSrcDir.setText(srcFolderString);
-                    }
-                }
-            }
-        });
-        */
         
         JMenuItem mntmMtpDeviceSrc = new JMenuItem("MTP Device");
         popupMenuSrc.add(mntmMtpDeviceSrc);
@@ -258,38 +239,6 @@ public class UI extends JFrame {
         JMenuItem mntmComputerDst = new JMenuItem("Computer");
         popupMenuDst.add(mntmComputerDst);
         addBrowseDialog(mntmComputerDst, txtDstDir, this::browsePCDialog);
-        /*
-        mntmComputerDst.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String dstFolderString = "";
-                if (usePortableDeviceChkBox.isSelected()) {
-                	dstFolderString = browseMTPDialog();
-                    
-                	
-                	//////////////////////
-                	///////////////////
-                	/////////////////////
-                	///////////////////
-                	/////////////////////
-                	///////////////////////
-                	/////////////////////
-                	
-                } else {
-	                try {
-	                    dstFolderString = browsePCDialog();
-	                } catch (InterruptedException | ExecutionException ex) {
-	                    System.err.println("FATAL: " + ex.getMessage());
-	                } finally {
-	                    // If the user did not choose a folder, then keep the current folder.
-	                    if (!dstFolderString.equals("")) {
-	                        txtDstDir.setText(dstFolderString);
-	                    }
-	                }
-                }
-            }
-        });
-        */
         
         JMenuItem mntmMtpDeviceDst = new JMenuItem("MTP Device");
         popupMenuDst.add(mntmMtpDeviceDst);
@@ -415,7 +364,7 @@ public class UI extends JFrame {
                 }
             }
         }));
-        
+        // Create robot for keeping the pc awake when syncing.
         try {
             robotKeepPCAwake = new Robot();
         } catch (AWTException e) {
@@ -542,68 +491,27 @@ public class UI extends JFrame {
     private String browseMTPDialog() {
     	PortableDevice[] devices = MTPUtil.getDevices();
     	if (devices.length == 0) {
+    		SimpleAttributeSet attr = new SimpleAttributeSet();
+            StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
+            writeStatusMsg("No MTP devices were detected!", attr);
     		return "";
     	}
     	// Now iterating the list of MTP devices.
+    	// TODO For now, it is only the first device. Do generalize...
     	PortableDevice mtpDevice = devices[0];
     	try {
     		mtpDevice.open();
     	} catch (DeviceAlreadyOpenedException e) { // Do nothing
     	}
-    	
-    	UIForMTPFileSystem uiMTP = new UIForMTPFileSystem(mtpDevice);
-    	setVisible(false); // Hide the UI until the user has selected an MTP folder
-    	uiMTP.setVisible(true);
-    	uiMTP.addWindowListener(new WindowAdapter() {
-    		@Override
-			public void windowClosing(WindowEvent arg0) {
-    			setVisible(true); // Display the main menu again.
-    		}
-		});
-    	
-    	
-    	ArrayList<PortableDeviceStorageObject> deviceStorages = MTPUtil.getDeviceStorages(mtpDevice);
-    	// Now iterating the list of storages
-    	for (PortableDeviceStorageObject storage : deviceStorages) {
-            if (!storage.getName().equals("SD-kort")) {
-                continue;
-            }
-            PortableDeviceFolderObject dstFolderDevice =
-                    (PortableDeviceFolderObject) MTPUtil.getChildByName(storage, "MusicTEST");
-            dstFolderDevice = MTPUtil.getChildByName(dstFolderDevice, "DEEPER");
-            dstFolderDevice = MTPUtil.getChildByName(dstFolderDevice, "EVEN DEEPER");
-            if (dstFolderDevice != null) {
-	            String tempPath = "";
-				PortableDeviceFolderObject tempFolder = dstFolderDevice;
-				while (tempFolder != null) {
-					tempPath = tempFolder.getOriginalFileName() + "\\" + tempPath;
-					if (tempFolder.getParent() instanceof PortableDeviceFolderObject) {
-						tempFolder = (PortableDeviceFolderObject) tempFolder.getParent();
-					} else {
-						break;
-					}
-				}
-				tempPath = "Computer\\" + mtpDevice.getFriendlyName() + "\\" + storage.getName() + "\\" + tempPath.substring(0, tempPath.length()-1);
-				SimpleAttributeSet attr = new SimpleAttributeSet();
-		        StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
-				writeStatusMsg("MTP Path: " + tempPath, attr);
-            } else {
-            	SimpleAttributeSet attr = new SimpleAttributeSet();
-		        StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
-				writeStatusMsg("FOLDER NOT FOUND", attr);
-            }
-    	}
-    	
-		return ""; // TODO REPLACE
+    	UIForMTPFileSystem uiMTP = new UIForMTPFileSystem(mtpDevice, this); // Initiate MTP folder dialog
+		return uiMTP.showDialog(); // Wait till a folder has been chosen.
     }
     
     /**
-     * Opens up a FileChooser dialog where you can open a file.
+     * Displays a DirectoryChooser dialog where you can select a folder.
      * 
      * @return the path to the folder chosen by the user, if any. Otherwise, it
      *         will be the empty string.
-     * @throws InterruptedException
-     * @throws ExecutionException
      */
     private String browsePCDialog() throws InterruptedException, ExecutionException {
         /*
@@ -614,38 +522,36 @@ public class UI extends JFrame {
             public String call() {
                 // Show open directory dialog
                 final File folder = dirChooser.showDialog(null);
-                final String folderString;
                 if (folder != null) {
                     dirChooser.setInitialDirectory(folder);
-                    folderString = folder.getAbsolutePath();
-                } else {
-                    folderString = "";
+                    return folder.getAbsolutePath();
                 }
-                return folderString;
+                return "";
             }
         });
         Platform.runLater(queryFolder);
         // The following call is synchronous; it will block until queryFolder is done.
         return queryFolder.get();
-    }
+}
     
-    private void addBrowseDialog(JMenuItem component, JTextField txtField, dialogMethod dialog) {
-    	component.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String srcFolderString = "";
-                try {
-                    srcFolderString = dialog.browseDialog();
-                } catch (InterruptedException | ExecutionException ex) {
-                    System.err.println("FATAL: " + ex.getMessage());
-                } finally {
-                    // If the user did not choose a folder, then keep the current folder.
-                    if (!srcFolderString.equals("")) {
-                        txtSrcDir.setText(srcFolderString);
-                    }
-                }
-            }
-        });
+	private void addBrowseDialog(JMenuItem component, JTextField txtField, dialogMethod dialog) {
+		component.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				String srcFolderString = "";
+				try {
+					srcFolderString = dialog.browseDialog();
+				} catch (InterruptedException | ExecutionException ex) {
+					System.err.println("FATAL: " + ex.getMessage());
+				} finally {
+					// If the user did not choose a folder, then keep the current folder.
+					System.out.println("addBrowseDialog(): String acquired is " + srcFolderString);
+					if (!srcFolderString.equals("")) {
+						txtField.setText(srcFolderString);
+					}
+				} // Finally end
+            } // actionPerformed() end
+        }); // Listener end
 	}
 
 	/**
