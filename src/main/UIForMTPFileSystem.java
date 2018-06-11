@@ -37,6 +37,7 @@ import javax.swing.event.TreeExpansionListener;
 import javax.swing.event.TreeExpansionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import javax.swing.JScrollPane;
 
 public class UIForMTPFileSystem extends JFrame {
 	/**
@@ -50,11 +51,6 @@ public class UIForMTPFileSystem extends JFrame {
 	private static final ImageIcon ICON_FOLDER = new ImageIcon(BASE_PATH_ICONS + "folder.png");
 	private static final ImageIcon ICON_FOLDER_EXP = new ImageIcon(BASE_PATH_ICONS + "folder-exp.png");
 	private static final int DEVICE_ROW = 0;
-	// TEST STUFF 
-	/*
-	final int maxNewNodes = 3;
-	int countOfNewNodes = 0;
-	*/
 	private List<Integer> nodeHashCodesList = new ArrayList<>();
 	private Map<TreePath, PortableDeviceStorageObject> pathStorageMap = new HashMap<>();
 	private Map<TreePath, PortableDeviceFolderObject> pathFolderMap = new HashMap<>();
@@ -83,7 +79,7 @@ public class UIForMTPFileSystem extends JFrame {
 	public UIForMTPFileSystem(PortableDevice device) {
 		// When closing, clean up WITHOUT exiting the whole application
 		setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-		setBounds(100, 100, 450, 300);
+		setBounds(100, 100, 450, 400);
 		contentPane = new JPanel();
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		contentPane.setLayout(new BorderLayout(0, 0));
@@ -94,8 +90,13 @@ public class UIForMTPFileSystem extends JFrame {
 		JTree tree = new JTree(top);
 		// Insert the detected storage units
 		ArrayList<PortableDeviceStorageObject> deviceStorages = MTPUtil.getDeviceStorages(device);
-		// Sort list of storages in alphabetical order
-		deviceStorages.sort((storage1, storage2)->storage1.getName().compareTo(storage2.getName()));
+		/*
+		 * Sort list of storages in alphabetical order. Note that we HAVE to use
+		 * ::getName() instead of ::getOriginalFileName() because the later does NOT
+		 * work for Storage objects!
+		 * TODO Test if this still works for renamed SD-cards.
+		 */
+		deviceStorages.sort((storage1, storage2)->storage1.getName().compareToIgnoreCase(storage2.getName()));
 		for (int i = 0; i < deviceStorages.size(); i++) {
 			PortableDeviceStorageObject storage = deviceStorages.get(i);
 			addChildToTree(new IconData(ICON_STORAGE, null, storage.getName()), tree, top);
@@ -105,7 +106,10 @@ public class UIForMTPFileSystem extends JFrame {
 		visitStorages(deviceStorages, tree);
 		// Specify a custom cell renderer for icons etc.
 		tree.setCellRenderer(new IconCellRenderer());
-		contentPane.add(tree, BorderLayout.CENTER);
+		//contentPane.add(tree, BorderLayout.CENTER);
+		
+		JScrollPane scrollPane = new JScrollPane(tree);
+		contentPane.add(scrollPane, BorderLayout.CENTER);
 		// Attach a mouse listener which, when a node is double-clicked, displays its
 		// children if double-clicked (i.e. expanded) for the first time.
 		tree.addMouseListener(new MouseAdapter() {
@@ -119,13 +123,13 @@ public class UIForMTPFileSystem extends JFrame {
 					TreePath pathToNode = tree.getPathForLocation(e.getX(), e.getY());
 					if (!nodeHashCodesList.contains(pathToNode.hashCode())) {
 						// The node has not been visited before. Visit its children, if any.
-						System.out.println("Visiting path " + pathToNode);
 						visitChild(pathToNode, tree);
 						nodeHashCodesList.add(pathToNode.hashCode()); // Mark node as visited.
 					}
 				}
 			}
 		});
+		/*
 		tree.addTreeExpansionListener(new TreeExpansionListener() {
 			@Override
 			public void treeCollapsed(TreeExpansionEvent event) { // Do nothing
@@ -136,21 +140,6 @@ public class UIForMTPFileSystem extends JFrame {
 				System.out.println("Expanding tree " + selectedNode.getPath());
 				if (!nodeHashCodesList.contains(selectedNode.getPath().hashCode())) {
 					nodeHashCodesList.add(selectedNode.getPath().hashCode());
-				}
-			}
-		});
-		// Attach a listener to every node which traverses a selected node and displays its children. 
-		/*
-		tree.addTreeSelectionListener(new TreeSelectionListener() {
-			@Override
-			public void valueChanged(TreeSelectionEvent selectedNode) {
-				// Check if the node has been marked before. If yes, then do nothing.
-				final int selectedNodeHashCode = selectedNode.getPath().getLastPathComponent().hashCode();
-				if (!nodeHashCodesList.contains(selectedNodeHashCode)) {
-					// Mark node as ready to be visited.
-//					nodeHashCodesList.add(selectedNodeHashCode);
-				} else {
-					System.out.println("TEST: Old visited node at " + selectedNode.getPath() + ". No. of rows: " + tree.getRowCount());
 				}
 			}
 		});
@@ -189,7 +178,7 @@ public class UIForMTPFileSystem extends JFrame {
 			PortableDeviceStorageObject storage = pathStorageMap.get(pathWithoutChild);
 			// TODO If storages are added correctly, then this check can be optimized away.
 			if (storage != null) {
-				System.out.println("Visiting storage " + storage.getName() + " and child " + childNode);
+//				System.out.println("Visiting storage " + storage.getName() + " and child " + childNode);
 				PortableDeviceFolderObject parentFolder = (PortableDeviceFolderObject) MTPUtil.getChildByName(storage,
 						childNode.toString());
 				if (parentFolder == null) {
@@ -198,7 +187,7 @@ public class UIForMTPFileSystem extends JFrame {
 				} else {
 					PortableDeviceObject[] children = parentFolder.getChildObjects();
 					if (children.length > 0) {
-						insertFoldersIntoTree(parentFolder.getChildObjects(), tree, childNode);
+						insertFoldersIntoTree(children, tree, childNode);
 						tree.expandRow(tree.getRowForPath(pathToNode));
 						// Store path of visited parent folder so that we can visit its children.
 						pathFolderMap.put(pathToNode, parentFolder);
@@ -218,15 +207,13 @@ public class UIForMTPFileSystem extends JFrame {
 			} else {
 				PortableDeviceObject[] children = parentFolder.getChildObjects();
 				if (children.length > 0) {
-					insertFoldersIntoTree(parentFolder.getChildObjects(), tree, childNode);
+					insertFoldersIntoTree(children, tree, childNode);
 					tree.expandRow(tree.getRowForPath(pathToNode));
 					// Like before, store path of this parent folder in case we visit its children.
 					pathFolderMap.put(pathToNode, parentFolder);
 				}
 			}
 		}
-		
-		
 	}
 
 	/**
@@ -251,25 +238,6 @@ public class UIForMTPFileSystem extends JFrame {
 				// Store storage path for when visiting its children.
 				pathStorageMap.put(tree.getPathForRow(i + 1), deviceStorages.get(i));
 			}
-			/*
-			List<PortableDeviceFolderObject> listOfFolders = new ArrayList<>();
-			for (int j = 0; j < storageChildren.length; j++) {
-				// Only include the child in the tree if it's a folder. 
-				if (storageChildren[j] instanceof PortableDeviceFolderObject) {
-					PortableDeviceFolderObject newFolder = (PortableDeviceFolderObject) storageChildren[j];
-					listOfFolders.add(newFolder);
-				}
-			}
-			// Sort folders alphabetically with lambda expression
-			listOfFolders.sort((folder1, folder2)->folder1.getName().compareTo(folder2.getName()));
-			// Insert the folders into the tree structure
-			DefaultMutableTreeNode storageNode = (DefaultMutableTreeNode) tree.getModel()
-					.getChild(tree.getModel().getRoot(), i);
-			for (int j = 0; j < listOfFolders.size(); j++) {
-				addChildToTree(new IconData(ICON_FOLDER, ICON_FOLDER_EXP, listOfFolders.get(j).getName()), tree,
-						storageNode);
-			}
-			*/
 		}
 	}
 
@@ -283,10 +251,16 @@ public class UIForMTPFileSystem extends JFrame {
 			}
 		}
 		// Sort folders alphabetically with lambda expression
-		listOfFolders.sort((folder1, folder2)->folder1.getName().compareTo(folder2.getName()));
-		// Insert the folders into the tree structure
+		listOfFolders.sort(
+				(folder1, folder2) -> folder1.getOriginalFileName().compareToIgnoreCase(folder2.getOriginalFileName()));
+		/*
+		 * Insert the folders into the tree structure. ::getOriginalFileName() is used
+		 * instead of ::getName() as the latter returns the "old" name (usually
+		 * "New folder"). For a with two '.' in its name, everything after the second
+		 * '.' is ignored when using ::getName()
+		 */
 		for (int j = 0; j < listOfFolders.size(); j++) {
-			addChildToTree(new IconData(ICON_FOLDER, ICON_FOLDER_EXP, listOfFolders.get(j).getName()), tree,
+			addChildToTree(new IconData(ICON_FOLDER, ICON_FOLDER_EXP, listOfFolders.get(j).getOriginalFileName()), tree,
 					parentNode);
 		}
 	}
