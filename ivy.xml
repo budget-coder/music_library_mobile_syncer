@@ -43,7 +43,7 @@
 	<!-- JAudiotagger should be 2.2.6 but it is not on the maven rep. yet. -->
     <dependency org="net.jthink" 
 		name="jaudiotagger"
-		rev="2.2.3"
+		rev="2.2.5"
 		conf="default;optional"/>
 	<!-- usb4java, a Java library to access USB devices -->
 	<!-- <dependency org="org.usb4java"
