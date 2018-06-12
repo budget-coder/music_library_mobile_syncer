@@ -19,13 +19,13 @@ public class PCDeviceStrategy implements DeviceStrategy {
 	}
 	
 	@Override
-	public boolean isDstADirectory() {
+	public boolean isADirectory() {
 		//return dstFolder.isDirectory();
 		return dstFolderPC.isDirectory();
 	}
 	
 	@Override
-	public FileWrapper[] listDstFiles() {
+	public FileWrapper[] listFiles() {
 		//final File[] dstFolderList = dstFolder.listFiles();
 		final FileWrapper[] dstFolderList = dstFolderPC.listFiles();
 		FileWrapper[] returnList = new FileWrapper[dstFolderList.length];
@@ -36,7 +36,7 @@ public class PCDeviceStrategy implements DeviceStrategy {
 	}
 	
 	@Override
-	public FileWrapper getDstFolder() {
+	public FileWrapper getFolder() {
 		return dstFolderPC;
 	}
 	
