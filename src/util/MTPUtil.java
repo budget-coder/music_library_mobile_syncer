@@ -26,7 +26,7 @@ public class MTPUtil {
         if (path.indexOf("\\") != -1) {
             String fileName = path.substring(0, path.indexOf("\\"));
             if (folder == null) {
-                folderNew = (PortableDeviceFolderObject) getChildByName(storage, fileName);
+                folderNew = (PortableDeviceFolderObject) getChildFileByName(storage, fileName);
                 if (folderNew == null) {
                     folderNew = storage.createFolderObject(fileName);
                     // LogUtil.debugPrint(LogUtil.LOG_LEVEL_FULL,MTPUtil.class.getSimpleName(),
@@ -34,7 +34,7 @@ public class MTPUtil {
                 }
                 return createFolder(path, storage, folderNew, lastDir);
             } else {
-                folderNew = (PortableDeviceFolderObject) getChildByName(folder, fileName);
+                folderNew = (PortableDeviceFolderObject) getChildFolderByName(folder, fileName);
                 if (folderNew == null) {
                     folderNew = folder.createFolderObject(fileName);
                     // LogUtil.debugPrint(LogUtil.LOG_LEVEL_FULL,
@@ -46,10 +46,10 @@ public class MTPUtil {
             if (folder == null) {
                 // no need to do anything
                 // storage.createFolderObject(lastDir);
-                folderNew = (PortableDeviceFolderObject) getChildByName(storage,
+                folderNew = (PortableDeviceFolderObject) getChildFileByName(storage,
                         lastDir);
             } else {
-                folderNew = getChildByName(folder, lastDir);
+                folderNew = getChildFolderByName(folder, lastDir);
                 if (folderNew == null) {
                     // LogUtil.debugPrint(LogUtil.LOG_LEVEL_FULL,
                     // MTPUtil.class.getSimpleName(), "Created Last Directory "
@@ -60,22 +60,27 @@ public class MTPUtil {
             return folderNew;
         }
     }
-
-    //private static PortableDeviceFolderObject getChildByName(
-    public static PortableDeviceFolderObject getChildByName(
-            PortableDeviceFolderObject folder, String childName) {
-        for (PortableDeviceObject object : folder.getChildObjects()) {
+    
+    public static PortableDeviceObject getChildFileByName(
+    		PortableDeviceFolderObject folder, String childName) {
+    	for (PortableDeviceObject object : folder.getChildObjects()) {
             if (object.getOriginalFileName().equals(childName)) {
                 // LogUtil.debugPrint(LogUtil.LOG_LEVEL_FULL,MTPUtil.class.getSimpleName(),
                 // "Found directory " + z);
-                return (PortableDeviceFolderObject) object;
+                return object;
             }
         }
         return null;
     }
 
+    //private static PortableDeviceFolderObject getChildByName(
+    public static PortableDeviceFolderObject getChildFolderByName(
+            PortableDeviceFolderObject folder, String childName) {
+        return (PortableDeviceFolderObject) getChildFileByName(folder, childName);
+    }
+
     //private static PortableDeviceObject getChildByName(
-    public static PortableDeviceObject getChildByName(
+    public static PortableDeviceObject getChildFileByName(
             PortableDeviceStorageObject storage, String childName) {
         for (PortableDeviceObject object : storage.getChildObjects()) {
             if (object.getOriginalFileName().equals(childName)) {
@@ -85,6 +90,55 @@ public class MTPUtil {
             }
         }
         return null;
+    }
+    
+    public static PortableDeviceObject getChildFileByNameRecursively(
+    		PortableDeviceFolderObject folder, String pathToChild) {
+    	PortableDeviceFolderObject nextFolderObj = folder; // Take a copy first
+    	PortableDeviceObject nextFileObj;
+    	String currFolder = "";
+    	do {
+    		final int indexOfSeperator = pathToChild.indexOf('/');
+    		// If and only if there are more separators, then use the index of the next one.
+    		if (indexOfSeperator >= 0) {
+    			currFolder = pathToChild.substring(0, pathToChild.indexOf('/'));
+    			pathToChild = pathToChild.substring(currFolder.length()+1); // Again, +1 for skipping separator '/'
+    		} else {
+    			// No separator found i.e. we must have gotten to the last folder.
+    			currFolder = pathToChild;
+    			pathToChild = pathToChild.substring(currFolder.length());
+    		}
+    		nextFileObj = MTPUtil.getChildFileByName(nextFolderObj, currFolder);
+    		//System.out.println("nextFileObj is null? " + (nextFileObj == null) + ". Path is " + pathToChild);
+    		if (nextFileObj instanceof PortableDeviceFolderObject) {
+    			//System.out.println(nextFileObj.getOriginalFileName() + " is an instance of folder");
+    			nextFolderObj = (PortableDeviceFolderObject) nextFileObj;
+    		} else if (!(nextFileObj == null)) { // TODO Replace with null pattern
+    			break; // We found a file instead of a folder. Break out.
+    		}
+    	} while (!pathToChild.isEmpty() && nextFileObj != null);
+    	return nextFileObj;
+    }
+    
+    public static PortableDeviceObject getChildFileByNameRecursively(
+    		PortableDeviceStorageObject storage, String pathToChild) {
+    	String currFolder = "";
+    	// If no '/' is found, then the path only consists of one folder
+    	if (pathToChild.indexOf('/') <= 0) {
+    		currFolder = pathToChild;
+    		return (PortableDeviceFolderObject) MTPUtil.getChildFileByName(storage, currFolder);
+    	}
+    	// If we got here, then the path consists of multiple folders which means we can recurse!
+    	currFolder = pathToChild.substring(0, pathToChild.indexOf('/'));
+    	PortableDeviceFolderObject nextFolderObj = (PortableDeviceFolderObject) MTPUtil.getChildFileByName(storage, currFolder);
+    	// Iterate through the rest of the folders, if any
+    	String nextFolders = pathToChild.substring(currFolder.length()+1); // Skip the first folder. +1 skips '/'
+    	// If the path is "", then the first folder was just post-fixed with '/'. Return resultant folder.
+    	if (nextFolders.isEmpty()) {
+    		return nextFolderObj;
+    	}
+    	// Now we recurse through the rest of the folders!
+    	return getChildFileByNameRecursively(nextFolderObj, nextFolders);
     }
 
     public static PortableDevice[] getDevices() {
