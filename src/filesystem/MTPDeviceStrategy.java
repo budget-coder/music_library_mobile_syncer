@@ -64,12 +64,12 @@ public class MTPDeviceStrategy implements DeviceStrategy {
 	}
 
 	@Override
-	public boolean isDstADirectory() {
+	public boolean isADirectory() {
 		return dstFolderMTP.isDirectory();
 	}
 
 	@Override
-	public FileWrapper[] listDstFiles() {
+	public FileWrapper[] listFiles() {
 		final FileWrapper[] dstFolderList = dstFolderMTP.listFiles();
 		FileWrapper[] returnList = new FileWrapper[dstFolderList.length];
 		for (int i = 0; i < dstFolderList.length; ++i) {
@@ -79,7 +79,7 @@ public class MTPDeviceStrategy implements DeviceStrategy {
 	}
 
 	@Override
-	public FileWrapper getDstFolder() {
+	public FileWrapper getFolder() {
 		return dstFolderMTP;
 	}
 

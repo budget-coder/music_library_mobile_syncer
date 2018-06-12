@@ -3,13 +3,13 @@ package framework;
 import java.io.IOException;
 
 public interface DeviceStrategy {
-	public boolean isDstADirectory();
+	public boolean isADirectory();
 
-	public FileWrapper[] listDstFiles();
+	public FileWrapper[] listFiles();
 
-	public FileWrapper getDstFolder();
+	public FileWrapper getFolder();
 
 	public FileWrapper getFileInstance(String path);
-
+	
 	public void copyMusicToDst(FileWrapper newMusic) throws IOException;
 }
