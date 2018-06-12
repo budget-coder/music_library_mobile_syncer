@@ -5,12 +5,12 @@ import java.awt.MouseInfo;
 import java.awt.Robot;
 import java.io.File;
 import java.io.IOException;
-import java.math.BigInteger;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 
 import be.derycke.pieter.com.COMException;
+import filesystem.MTPFile;
 import jmtp.PortableDevice;
 import jmtp.PortableDeviceAudioObject;
 import jmtp.PortableDeviceFolderObject;
@@ -30,15 +30,48 @@ public class TestEnvironment {
         MTPFileManager mtpFileManager = new MTPFileManager(mtpDevice);
         mtpFileManager.openDevice();
         //devices[0].open(); // TODO Show list to user...
-        ArrayList<PortableDeviceStorageObject> deviceStorages = MTPUtil.getDeviceStorages(mtpDevice);
+        //testLocateAndPrintMusicTags(mtpDevice);
+        testRecursiveFolderLookup(mtpDevice);
+    }
+    
+    private static void testRecursiveFolderLookup(PortableDevice mtpDevice) {
+    	ArrayList<PortableDeviceStorageObject> deviceStorages = MTPUtil.getDeviceStorages(mtpDevice);
+    	for (PortableDeviceStorageObject storage : deviceStorages) {
+            if (!storage.getName().equals("SD-kort")) {
+                continue;
+            }
+            String musicPath = "MusicTEST/DEEPER/EVEN DEEPER/ACE+ - Into the World of Zanza.mp3";
+            String folderPath = "MusicTEST/DEEPER/EVEN DEEPER";
+            PortableDeviceObject dstFolderDevice = MTPUtil.getChildFileByNameRecursively(storage, folderPath);
+            PortableDeviceObject dstFileDevice = MTPUtil.getChildFileByNameRecursively(storage, musicPath);
+            if (dstFolderDevice != null) {
+            	System.out.println("Path " + folderPath + " EXISTED! Got file " + dstFolderDevice.getOriginalFileName());
+            	MTPFile test = new MTPFile(storage, folderPath);
+            	System.out.println("test is directory? " + test.isDirectory() );
+            } else {
+            	System.err.println("Path " + folderPath + " did NOT exist!");
+            }
+            // Next file
+            if (dstFileDevice != null) {
+            	System.out.println("Path " + musicPath + " EXISTED! Got file " + dstFileDevice.getOriginalFileName());
+            	MTPFile test = new MTPFile(storage, musicPath);
+            	System.out.println("test is directory? " + test.isDirectory() );
+            } else {
+            	System.err.println("Path " + musicPath + " did NOT exist!");
+            }
+    	}
+    }
+    
+    private static void testLocateAndPrintMusicTags(PortableDevice mtpDevice) {
+    	ArrayList<PortableDeviceStorageObject> deviceStorages = MTPUtil.getDeviceStorages(mtpDevice);
         System.out.println("Now iterating the list of storages...");
         for (PortableDeviceStorageObject storage : deviceStorages) {
             if (!storage.getName().equals("SD-kort")) {
                 continue;
             }
             PortableDeviceFolderObject dstFolderDevice =
-                    (PortableDeviceFolderObject) MTPUtil.getChildByName(storage, "MusicTEST");
-            dstFolderDevice = MTPUtil.getChildByName(dstFolderDevice, "DEEPER");
+                    (PortableDeviceFolderObject) MTPUtil.getChildFileByName(storage, "MusicTEST");
+            dstFolderDevice = MTPUtil.getChildFolderByName(dstFolderDevice, "DEEPER");
             if (dstFolderDevice != null) {
                 //PortableDeviceToHostImpl32 copy = new PortableDeviceToHostImpl32();
                 //PortableDeviceObject mtpDeviceObject = (PortableDeviceObject) mtpDevice;
@@ -71,10 +104,9 @@ public class TestEnvironment {
             }
             break;
         }
-        
     }
     
-    private void testCopy(PortableDeviceFolderObject dstFolderDevice, MTPFileManager mtpFileManager) {
+    private static void testCopy(PortableDeviceFolderObject dstFolderDevice, MTPFileManager mtpFileManager) {
     	String tempPath = "";
 		PortableDeviceFolderObject tempFolder = dstFolderDevice;
 		while (tempFolder != null) {
@@ -99,7 +131,7 @@ public class TestEnvironment {
 		}
     }
     
-    private void testRobot() throws InterruptedException {
+    private static void testRobot() throws InterruptedException {
         Robot robot = null;
         try {
             robot = new Robot();
