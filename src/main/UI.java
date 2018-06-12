@@ -1,23 +1,23 @@
 package main;
 import java.awt.AWTException;
 import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.MouseInfo;
 import java.awt.Robot;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -29,13 +29,14 @@ import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JFrame;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
-import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultStyledDocument;
 import javax.swing.text.MutableAttributeSet;
@@ -49,15 +50,7 @@ import javafx.embed.swing.JFXPanel;
 import javafx.stage.DirectoryChooser;
 import jmtp.DeviceAlreadyOpenedException;
 import jmtp.PortableDevice;
-import jmtp.PortableDeviceFolderObject;
-import jmtp.PortableDeviceStorageObject;
 import util.MTPUtil;
-import javax.swing.JPopupMenu;
-import java.awt.Component;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
 
 @FunctionalInterface
 interface dialogMethod {
@@ -89,8 +82,10 @@ public class UI extends JFrame {
     private final int deleteOrphanedIndex;
     private final String searchInSubdirectoriesAttr;
     private final int searchInSubdirectoriesIndex;
-    private final String usePortableDeviceAttr;
-    private final int usePortableDeviceIndex;
+    private final String srcIsAnMTPDeviceAttr;
+    private final int srcIsAnMTPDeviceIndex;
+    private final String dstIsAnMTPDeviceAttr; 
+    private final int dstIsAnMTPDeviceIndex;
     private final String windowXAttr;
     private int windowX = -1;
     private final String windowYAttr;
@@ -122,22 +117,28 @@ public class UI extends JFrame {
         // Avoid race conditions between MusicSyncer and UI accessing progressBarValue.
         readProgressSemaphore = new Semaphore(-1, IS_FCFS);
         // For reading the settings correctly
+        char currIndex = 0;
         srcFolderAttr = "srcFolder=";
-        srcFolderIndex = 0;
+        srcFolderIndex = currIndex;
         dstFolderAttr = "dstFolder=";
-        dstFolderIndex = 1;
+        dstFolderIndex = ++currIndex;
         addNewMusicAttr = "addNewMusic=";
-        addNewMusicIndex = 2;
+        addNewMusicIndex = ++currIndex;
         deleteOrphanedAttr= "deleteOrphaned=";
-        deleteOrphanedIndex = 3;
+        deleteOrphanedIndex = ++currIndex;
         searchInSubdirectoriesAttr = "searchInSubdirectories=";
-        searchInSubdirectoriesIndex = 4;
-        usePortableDeviceAttr = "usePortableDevice=";
-        usePortableDeviceIndex = 5;
+        searchInSubdirectoriesIndex = ++currIndex;
+        srcIsAnMTPDeviceAttr = "srcIsAnMTPDevice=";
+        srcIsAnMTPDeviceIndex = ++currIndex;
+        dstIsAnMTPDeviceAttr = "dstIsAnMTPDevice=";
+        dstIsAnMTPDeviceIndex = ++currIndex;
+		// The following attributes are not represented on the UI and therefore do not
+		// need indices like the others above.
         windowXAttr = "windowX=";
         windowYAttr = "windowY=";
         windowWidthAttr = "windowWidth=";
         windowHeightAttr = "windowHeight=";
+        // Set up the UI
         setTitle("Music Library Mobile Syncer");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // Close application
         // Load MLMS_Settings.txt if available.
@@ -147,7 +148,7 @@ public class UI extends JFrame {
         } else { // Default values
             setBounds(100, 100, 450, 300);
         }
-        
+        // Start adding components to the UI
         JPanel topPanel = new JPanel();
         getContentPane().add(topPanel, BorderLayout.NORTH);
         topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.X_AXIS));
@@ -162,7 +163,7 @@ public class UI extends JFrame {
         statusTextDoc = new DefaultStyledDocument();
         statusText = new JTextPane(statusTextDoc);
         statusText.setEditable(false);
-        statusText.setText("Status window:\n");
+        statusText.setText("Status window:" + System.lineSeparator());
         centerPanel.setViewportView(statusText);
         
         txtSrcDir = new JTextField();
@@ -178,11 +179,11 @@ public class UI extends JFrame {
         }
         txtSrcDir.setColumns(10);
         txtDstDir.setColumns(10);
-        // Initialize west panel with checkboxes
+        // Initialize west panel with check boxes
         JPanel westPanel = new JPanel();
         getContentPane().add(westPanel, BorderLayout.WEST);
         westPanel.setLayout(new BoxLayout(westPanel, BoxLayout.Y_AXIS));
-        
+        // Add check boxes to the panel
         JCheckBox addNewMusicChkBox = new JCheckBox("Add new music");
         // Load previous settings and only care about whether "true" was written correctly.
         addNewMusicChkBox.setSelected(Boolean.valueOf(arrayOfSettings[addNewMusicIndex]));
@@ -195,9 +196,13 @@ public class UI extends JFrame {
         JCheckBox searchInSubdirsChkBox = new JCheckBox("Search in subdirectories");
         searchInSubdirsChkBox.setSelected(Boolean.valueOf(arrayOfSettings[searchInSubdirectoriesIndex]));
         westPanel.add(searchInSubdirsChkBox);
-        JCheckBox usePortableDeviceChkBox = new JCheckBox("Use portable device");
-        usePortableDeviceChkBox.setSelected(Boolean.valueOf(arrayOfSettings[usePortableDeviceIndex]));
-        westPanel.add(usePortableDeviceChkBox);
+        JCheckBox srcIsAnMTPDeviceChkBox = new JCheckBox("Source is an MTP device");
+        srcIsAnMTPDeviceChkBox.setSelected(Boolean.valueOf(arrayOfSettings[srcIsAnMTPDeviceIndex]));
+        westPanel.add(srcIsAnMTPDeviceChkBox);
+        JCheckBox dstIsAnMTPDeviceChkBox = new JCheckBox("Destination is an MTP device");
+        dstIsAnMTPDeviceChkBox.setSelected(Boolean.valueOf(arrayOfSettings[dstIsAnMTPDeviceIndex]));
+        westPanel.add(dstIsAnMTPDeviceChkBox);
+        
         // Initialize browse panel
         JPanel browsePanel = new JPanel();
         topPanel.add(browsePanel);
@@ -288,12 +293,12 @@ public class UI extends JFrame {
                     Runnable musicSyncerRunnable = new Runnable() {
                         @Override
                         public void run() {
-                            musicSyncer = new MusicSyncer(txtSrcDir.getText(), txtDstDir.getText(), null);
-                            // Include the state of the checkboxes.
+							musicSyncer = new MusicSyncer(txtSrcDir.getText(), txtDstDir.getText(),
+									srcIsAnMTPDeviceChkBox.isSelected(), dstIsAnMTPDeviceChkBox.isSelected());
+                            // Include the state of the check boxes.
                             musicSyncer.setAddNewMusicOption(addNewMusicChkBox.isSelected());
                             musicSyncer.setDeleteOrphanedMusic(deleteOrphanedChkBox.isSelected());
                             musicSyncer.setSearchInSubdirectories(searchInSubdirsChkBox.isSelected());
-                            musicSyncer.setUsePortableDevice(usePortableDeviceChkBox.isSelected());
                             try {
                                 musicSyncer.initiate();
                             } catch (InterruptedException e) {
@@ -342,22 +347,25 @@ public class UI extends JFrame {
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
             public void run() {
+            	System.out.println("Src/Dst paths: " + txtSrcDir.getText() + ", " + txtDstDir.getText());
+            	final List<String> settings = Arrays.asList(srcFolderAttr
+                        + txtSrcDir.getText() + System.lineSeparator() + dstFolderAttr
+                        + txtDstDir.getText() + System.lineSeparator() + addNewMusicAttr
+                        + addNewMusicChkBox.isSelected() + System.lineSeparator()
+                        + deleteOrphanedAttr
+                        + deleteOrphanedChkBox.isSelected() + System.lineSeparator()
+                        + searchInSubdirectoriesAttr
+                        + searchInSubdirsChkBox.isSelected() + System.lineSeparator()
+                        + srcIsAnMTPDeviceAttr
+                        + srcIsAnMTPDeviceChkBox.isSelected() + System.lineSeparator()
+                        + dstIsAnMTPDeviceAttr
+                        + dstIsAnMTPDeviceChkBox.isSelected() + System.lineSeparator()
+                        + windowXAttr + getX() + System.lineSeparator()
+                        + windowYAttr + getY() + System.lineSeparator()
+                        + windowWidthAttr + getWidth() + System.lineSeparator()
+                        + windowHeightAttr + getHeight() + System.lineSeparator()
+        		);
                 try {
-                    final List<String> settings = Arrays.asList(srcFolderAttr
-                            + txtSrcDir.getText() + "\n" + dstFolderAttr
-                            + txtDstDir.getText() + "\n" + addNewMusicAttr
-                            + addNewMusicChkBox.isSelected() + "\n"
-                            + deleteOrphanedAttr
-                            + deleteOrphanedChkBox.isSelected() + "\n"
-                            + searchInSubdirectoriesAttr
-                            + searchInSubdirsChkBox.isSelected() + "\n"
-                            + usePortableDeviceAttr
-                            + usePortableDeviceChkBox.isSelected() + "\n"
-                            + windowXAttr + getX() + "\n"
-                            + windowYAttr + getY() + "\n"
-                            + windowWidthAttr + getWidth() + "\n"
-                            + windowHeightAttr + getHeight() + "\n"
-            		);
                     Files.write(Paths.get("MLMS_Settings.txt"), settings, Charset.forName("UTF-8"));
                 } catch (IOException e) {
                     System.err.println("ERROR: Could not save a list of the music to a .txt file!");
@@ -379,7 +387,7 @@ public class UI extends JFrame {
      * release immediately and continue!
      * 
      * @param increment
-     *            the value to increment the progress bar's value by.
+     *            - the value to increment the progress bar's value by.
      */
     public static void updateProgressBar(final int increment) {
     	// Move mouse to same location, effectively keeping the PC awake.
@@ -399,7 +407,8 @@ public class UI extends JFrame {
         String addNewMusic = "";
         String deleteOrphaned = "";
         String searchInSubdirectories = "";
-        String usePortableDevice = "";
+        String srcIsAnMTPDevice = "";
+        String dstIsAnMTPDevice = "";
         final String[] returnArray;
         File settings = new File("MLMS_Settings.txt");
         if (!settings.exists()) {
@@ -419,8 +428,10 @@ public class UI extends JFrame {
                         deleteOrphaned = line.substring(deleteOrphanedAttr.length());
                     } else if (line.startsWith(searchInSubdirectoriesAttr)) {
                         searchInSubdirectories = line.substring(searchInSubdirectoriesAttr.length());
-                    } else if (line.startsWith(usePortableDeviceAttr)) {
-                        usePortableDevice = line.substring(usePortableDeviceAttr.length());
+                    } else if (line.startsWith(srcIsAnMTPDeviceAttr)) {
+                    	srcIsAnMTPDevice = line.substring(srcIsAnMTPDeviceAttr.length());
+                    } else if (line.startsWith(dstIsAnMTPDeviceAttr)) {
+                    	dstIsAnMTPDevice = line.substring(dstIsAnMTPDeviceAttr.length());
                     } else if (line.startsWith(windowXAttr)) {
                         windowX = Integer.parseInt(line.substring(windowXAttr.length()));
                     } else if (line.startsWith(windowYAttr)) {
@@ -433,28 +444,28 @@ public class UI extends JFrame {
                     line = br.readLine();
                 }
             } catch (FileNotFoundException e) {
-                SimpleAttributeSet attr = new SimpleAttributeSet();
-                StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
-                writeStatusMsg("No previous settings were found.", attr);
+                writeStatusMsg("No previous settings were found.", DataClass.INFO_COLOR);
             } catch (IOException e) {
                 System.err.println("Error when loading settings: " + e.getMessage());
             }
-			returnArray = new String[] {srcFolder, dstFolder, addNewMusic, deleteOrphaned, searchInSubdirectories,
-					usePortableDevice};
+			returnArray = new String[] { srcFolder, dstFolder, addNewMusic, deleteOrphaned, searchInSubdirectories,
+					srcIsAnMTPDevice, dstIsAnMTPDevice };
         }
         return returnArray;
     }
 
-    /**
-     * Write messages to the UI for the user to see. Only package visible to
-     * avoid calls from, for instance, the test package.
-     * 
-     * @param message
-     * @param attributeSet
-     */
+	/**
+	 * Write messages to the UI for the user to see. Only package visible to avoid
+	 * calls from, for instance, the test package.
+	 * 
+	 * @param message
+	 *            - the message
+	 * @param attributeSet
+	 *            - an attribute set for formatting the message
+	 */
     static void writeStatusMsg(final String message, final MutableAttributeSet attributeSet) {
         try {
-            statusTextDoc.insertString(statusTextDoc.getLength(), message + "\n", attributeSet);
+            statusTextDoc.insertString(statusTextDoc.getLength(), message + System.lineSeparator(), attributeSet);
         } catch (BadLocationException e) { // This should not happen
             System.err.println("FATAL: Could not write status message because of an "
                     + "invalid position. The error message: " + e.getMessage());
@@ -463,6 +474,22 @@ public class UI extends JFrame {
         if (isViewAtBottom()) {
             scrollToBottom();
         }
+    }
+    
+	/**
+	 * Write messages to the UI for the user to see. Only package visible to avoid
+	 * calls from, for instance, the test package
+	 * 
+	 * @param message
+	 *            - the message
+	 * @param color
+	 *            - color of the message
+	 * @see main.UI#writeStatusMsg(String, MutableAttributeSet)
+	 */
+    static void writeStatusMsg(final String message, final Color color) {
+    	SimpleAttributeSet attr = new SimpleAttributeSet();
+        StyleConstants.setForeground(attr, color);
+        writeStatusMsg(message, attr);
     }
     
     /**
@@ -488,6 +515,13 @@ public class UI extends JFrame {
         });
     }
     
+	/**
+	 * For documentation, please refer to the method specified in @see
+	 * 
+	 * @see main.UIForMTPFileSystem#showDialog()
+	 * @return the path to the folder chosen by the user, if any. Otherwise, it will
+	 *         be the empty string.
+	 */
     private String browseMTPDialog() {
     	PortableDevice[] devices = MTPUtil.getDevices();
     	if (devices.length == 0) {
@@ -504,15 +538,17 @@ public class UI extends JFrame {
     	} catch (DeviceAlreadyOpenedException e) { // Do nothing
     	}
     	UIForMTPFileSystem uiMTP = new UIForMTPFileSystem(mtpDevice, this); // Initiate MTP folder dialog
-		return uiMTP.showDialog(); // Wait till a folder has been chosen.
+		String strFolder = uiMTP.showDialog(); // Wait till a folder has been chosen.
+		mtpDevice.close(); // TODO Again, close ALL devices if every one of them is shown
+		return strFolder;
     }
     
     /**
-     * Displays a DirectoryChooser dialog where you can select a folder.
-     * 
-     * @return the path to the folder chosen by the user, if any. Otherwise, it
-     *         will be the empty string.
-     */
+	 * Displays a DirectoryChooser dialog where the user can select a folder.
+	 * 
+	 * @return the path to the folder chosen by the user, if any. Otherwise, it will
+	 *         be the empty string.
+	 */
     private String browsePCDialog() throws InterruptedException, ExecutionException {
         /*
          * TODO Javadoc for this awesome code is needed. Source: http://stackoverflow.com/a/13804542
@@ -545,7 +581,6 @@ public class UI extends JFrame {
 					System.err.println("FATAL: " + ex.getMessage());
 				} finally {
 					// If the user did not choose a folder, then keep the current folder.
-					System.out.println("addBrowseDialog(): String acquired is " + srcFolderString);
 					if (!srcFolderString.equals("")) {
 						txtField.setText(srcFolderString);
 					}
@@ -558,9 +593,9 @@ public class UI extends JFrame {
 	 * Add a pop-up menu to a component on left-click.
 	 * 
 	 * @param component
-	 *            a component (such as a JButton)
+	 *            - a component (such as a JButton)
 	 * @param popup
-	 *            the JPopupmenu
+	 *            - the JPopupmenu
 	 */
 	private static void addPopup(Component component, final JPopupMenu popup) {
 		component.addMouseListener(new MouseAdapter() {
