@@ -41,16 +41,26 @@ public class UIForMTPFileSystem {
 	private static final ImageIcon ICON_FOLDER = new ImageIcon(BASE_PATH_ICONS + "folder.png");
 	private static final ImageIcon ICON_FOLDER_EXP = new ImageIcon(BASE_PATH_ICONS + "folder-exp.png");
 	private static final int DEVICE_ROW = 0;
-	private List<Integer> nodeHashCodesList = new ArrayList<>();
-	private Map<TreePath, PortableDeviceStorageObject> pathStorageMap = new HashMap<>();
-	private Map<TreePath, PortableDeviceFolderObject> pathFolderMap = new HashMap<>();
-	private String stringChosenFolder = ""; // Folder path.
+	private List<Integer> listNodeHashCodes = new ArrayList<>();
+	private Map<TreePath, PortableDeviceStorageObject> mapPathStorage = new HashMap<>();
+	private Map<TreePath, PortableDeviceFolderObject> mapPathFolder = new HashMap<>();
+	private String strChosenFolder = ""; // Folder path.
 	
 	/**
 	 * Create the frame.
 	 */
 	public UIForMTPFileSystem(PortableDevice device, JFrame parentFrame) {
-		frame = new JDialog(parentFrame, true);
+		// TODO Following out-commented code are attempts at internationalizing the
+		// title just like DirectoryChooser does. I do not have a ResourceBundle though because
+    	// I thought I could somehow use java's built-in, IF ANY, or get someone else's.
+    	// Maybe attempt this in the future?
+    	//String title = ResourceBundle.getBundle("labels").getString("select-directory");
+		/*String title = ResourceBundle
+				.getBundle(Locale.getDefault().getLanguage() + "_" + Locale.getDefault().getCountry())
+				.getString("select-directory");
+		;
+		*/
+		frame = new JDialog(parentFrame, "Select directory", true);
 		// When closing, clean up WITHOUT exiting the whole application
 		frame.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 		frame.setBounds(100, 100, 450, 400);
@@ -75,7 +85,7 @@ public class UIForMTPFileSystem {
 			addChildToTree(new IconData(ICON_STORAGE, null, storage.getName()), tree, top);
 		}
 		tree.expandRow(DEVICE_ROW); // Expand the device, effectively showing the newly added storages.
-		nodeHashCodesList.add(tree.getModel().getRoot().hashCode()); // Make sure the device isn't visited again
+		listNodeHashCodes.add(tree.getModel().getRoot().hashCode()); // Make sure the device isn't visited again
 		visitStorages(deviceStorages, tree);
 		// Specify a custom cell renderer for icons etc.
 		tree.setCellRenderer(new IconCellRenderer());
@@ -95,10 +105,10 @@ public class UIForMTPFileSystem {
 				int nodeRow = tree.getRowForLocation(e.getX(), e.getY());
 				if (nodeRow != -1) { // A node has been double-clicked. Check if we've seen it before.
 					TreePath pathToNode = tree.getPathForLocation(e.getX(), e.getY());
-					if (!nodeHashCodesList.contains(pathToNode.hashCode())) {
+					if (!listNodeHashCodes.contains(pathToNode.hashCode())) {
 						// The node has not been visited before. Visit its children, if any.
 						visitChild(pathToNode, tree);
-						nodeHashCodesList.add(pathToNode.hashCode()); // Mark node as visited.
+						listNodeHashCodes.add(pathToNode.hashCode()); // Mark node as visited.
 					}
 				}
 			}
@@ -119,7 +129,7 @@ public class UIForMTPFileSystem {
 				    }
 					System.out.println("Path to selected node: " + currPath);
 					// Store the folder path in a field variable. 
-					stringChosenFolder = currPath;
+					strChosenFolder = currPath;
 				}
 			}
 		});
@@ -137,11 +147,11 @@ public class UIForMTPFileSystem {
 		DefaultMutableTreeNode childNode = (DefaultMutableTreeNode) pathToNode.getLastPathComponent();
 		// Check if we are visiting a storage's children or a child on a deeper level/column. 
 		if (pathWithoutChild.getPathCount() <= 2) {
-			PortableDeviceStorageObject storage = pathStorageMap.get(pathWithoutChild);
+			PortableDeviceStorageObject storage = mapPathStorage.get(pathWithoutChild);
 			// TODO If storages are added correctly, then this check can be optimized away.
 			if (storage != null) {
 //				System.out.println("Visiting storage " + storage.getName() + " and child " + childNode);
-				PortableDeviceFolderObject parentFolder = (PortableDeviceFolderObject) MTPUtil.getChildByName(storage,
+				PortableDeviceFolderObject parentFolder = (PortableDeviceFolderObject) MTPUtil.getChildFileByName(storage,
 						childNode.toString());
 				if (parentFolder == null) {
 					// TODO Display to user or something.
@@ -152,7 +162,7 @@ public class UIForMTPFileSystem {
 						insertFoldersIntoTree(children, tree, childNode);
 						tree.expandRow(tree.getRowForPath(pathToNode));
 						// Store path of visited parent folder so that we can visit its children.
-						pathFolderMap.put(pathToNode, parentFolder);
+						mapPathFolder.put(pathToNode, parentFolder);
 					}
 				}
 			}
@@ -161,7 +171,7 @@ public class UIForMTPFileSystem {
 				System.err.println(". No. of elements in path: " + pathToNode.getPath());
 			}
 		} else {
-			PortableDeviceFolderObject parentFolder = MTPUtil.getChildByName(pathFolderMap.get(pathWithoutChild),
+			PortableDeviceFolderObject parentFolder = MTPUtil.getChildFolderByName(mapPathFolder.get(pathWithoutChild),
 					childNode.toString());
 			if (parentFolder == null) {
 				// TODO Display to user or something.
@@ -172,7 +182,7 @@ public class UIForMTPFileSystem {
 					insertFoldersIntoTree(children, tree, childNode);
 					tree.expandRow(tree.getRowForPath(pathToNode));
 					// Like before, store path of this parent folder in case we visit its children.
-					pathFolderMap.put(pathToNode, parentFolder);
+					mapPathFolder.put(pathToNode, parentFolder);
 				}
 			}
 		}
@@ -182,10 +192,10 @@ public class UIForMTPFileSystem {
 	 * Visits and adds the children of each storage to a tree.
 	 * 
 	 * @param deviceStorages
-	 *            an <b> alphabetically sorted</b> list of storages in ascending
+	 *            - an <b> alphabetically sorted</b> list of storages in ascending
 	 *            order.
 	 * @param tree
-	 *            a tree with the storages in {@code deviceStorages} already
+	 *            - a tree with the storages in {@code deviceStorages} already
 	 *            inserted.
 	 */
 	private void visitStorages(ArrayList<PortableDeviceStorageObject> deviceStorages, JTree tree) {
@@ -196,9 +206,9 @@ public class UIForMTPFileSystem {
 				DefaultMutableTreeNode storageNode = (DefaultMutableTreeNode) tree.getModel()
 						.getChild(tree.getModel().getRoot(), i);
 				insertFoldersIntoTree(storageChildren, tree, storageNode);
-				nodeHashCodesList.add(storageNode.hashCode()); // Add the storage to the list of visited nodes.
+				listNodeHashCodes.add(storageNode.hashCode()); // Add the storage to the list of visited nodes.
 				// Store storage path for when visiting its children.
-				pathStorageMap.put(tree.getPathForRow(i + 1), deviceStorages.get(i));
+				mapPathStorage.put(tree.getPathForRow(i + 1), deviceStorages.get(i));
 			}
 		}
 	}
@@ -238,6 +248,6 @@ public class UIForMTPFileSystem {
 		frame.setVisible(true); // This will block the current thread if frame is modal.
 		// Call ::setVisible on the Event-Dispatch thread.
 		// SwingUtilities.invokeLater(() -> frame.setVisible(true));
-		return stringChosenFolder;
+		return strChosenFolder;
 	}
 } // End class
