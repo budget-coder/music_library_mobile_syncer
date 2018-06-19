@@ -32,11 +32,11 @@ Tag mappings: https://picard.musicbrainz.org/docs/mappings/
 ## License <br/>
 MLMS is primarily distributed under the terms of GPL-3.0.
 
-See [LICENSE](LICENSE) for details.
+See [LICENSE.md](LICENSE.md) for details.
 
 ### Third party software <br/>
 This product includes software developed by Joel Costigliola, Pascal Schumacher (assertj) and Paul Taylor (jaudiotagger) among others.
 
 In binary form, this product includes a revised version of [jmtpe](https://github.com/ultrah/jMTPe/) under the terms of GPL-3.0. You can find it in the [lib-core](lib-core/) folder under the name "[jmtpe.jar](lib-core/jmtpe.jar)".
 
-See [LICENSE-THIRD-PARTY](LICENSE-THIRD-PARTY) for details.
+See [LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md) for details.
