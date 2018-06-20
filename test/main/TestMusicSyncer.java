@@ -65,7 +65,8 @@ public class TestMusicSyncer {
     
     @Before
     public void setup() {
-        musicSync = new MusicSyncer(MUSIC_ORI, MUSIC_MOD);
+    	// Default is "add new music" and "delete orphaned music"
+        musicSync = new MusicSyncer(MUSIC_ORI, MUSIC_MOD, true, true);
     }
     
     @Test
