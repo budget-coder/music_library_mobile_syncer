@@ -1,6 +1,14 @@
 package filesystem;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+
+import org.jaudiotagger.tag.FieldKey;
+import org.jaudiotagger.tag.images.Artwork;
+
+import data.DataClass;
 import framework.FileWrapper;
+import jmtp.PortableDeviceAudioObject;
 import jmtp.PortableDeviceFolderObject;
 import jmtp.PortableDeviceObject;
 import jmtp.PortableDeviceStorageObject;
@@ -8,6 +16,7 @@ import util.MTPUtil;
 
 public class MTPFile implements FileWrapper {
 	private final PortableDeviceObject file;
+	private final PortableDeviceAudioObject audioFile;
 	
 	/**
 	 * Constructs a valid MTPFile for a valid storage and file path.
@@ -28,6 +37,12 @@ public class MTPFile implements FileWrapper {
 		} else {
 			file = new NullPortableDeviceObject();
 		}
+		if (file instanceof PortableDeviceAudioObject) {
+			audioFile = (PortableDeviceAudioObject) file;
+		} else {
+			// TODO improve with null pattern here as well
+			audioFile = null;
+		}
 	}
 	
 	/**
@@ -42,6 +57,11 @@ public class MTPFile implements FileWrapper {
 			file = new NullPortableDeviceObject();
 		} else {
 			file = MTPUtil.getChildFileByNameRecursively(parentFolder, pathToFile);
+		}
+		if (file instanceof PortableDeviceAudioObject) {
+			audioFile = (PortableDeviceAudioObject) file;
+		} else {
+			audioFile = null;
 		}
 	}
 
@@ -98,6 +118,60 @@ public class MTPFile implements FileWrapper {
 		}
 		return fileList;
 		*/
+	}
+
+	@Override
+	public String getDuration() {
+		return audioFile.getDuration().toString();
+	}
+
+	@Override
+	public String getTagData(FieldKey fieldKey) {
+		switch (fieldKey) {
+		case TITLE:
+			return audioFile.getTitle();
+		case ARTIST:
+			return audioFile.getArtist();
+		case ALBUM_ARTIST:
+			return audioFile.getAlbumArtist();
+		case ALBUM:
+			return audioFile.getAlbum();
+		case YEAR:
+			LocalDate localDate = audioFile.getReleaseDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+			return localDate.getYear() - 1900 + "";
+		case COMPOSER:
+			return audioFile.getComposer();
+		case DISC_NO:
+			System.err.println("FATAL: Attempting to acquire disc_no from mtp when NOT IMPLEMENTED YET");
+			return DataClass.ERROR_STRING;
+		case GENRE:
+			return audioFile.getGenre();
+		case TRACK:
+			return audioFile.getTrackNumber() + "";
+		default:
+			System.err.println("FATAL: Unknown tag " + fieldKey + " from mtp is requested");
+			return DataClass.ERROR_STRING;
+		}
+	}
+
+	@Override
+	public void changeTag(FieldKey fieldKey, String tagValueSrc) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void applyTagChanges() { // Do nothing when using the jmtp library.
+	}
+
+	@Override
+	public Artwork getAlbumArt() {
+		throw new UnsupportedOperationException(getClass().getName() + ": Not implemented yet");
+	}
+
+	@Override
+	public void changeAlbumArt(Artwork newArt) {
+		throw new UnsupportedOperationException(getClass().getName() + ": Not implemented yet");
 	}
 
 }
