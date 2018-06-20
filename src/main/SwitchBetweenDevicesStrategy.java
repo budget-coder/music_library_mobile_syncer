@@ -2,50 +2,29 @@ package main;
 
 import java.io.IOException;
 
-import filesystem.NullDeviceStrategy;
 import framework.DeviceStrategy;
 import framework.FileWrapper;
 import framework.StateDeviceStrategy;
 
-public class SwitchBetweenDevicesStrategy extends NullDeviceStrategy implements StateDeviceStrategy {
-	private final DeviceStrategy mtpStrategy;
-	private final DeviceStrategy pcStrategy;
-	private DeviceStrategy currentSrcState;
-	private DeviceStrategy currentDstState;
+// TODO why am I extending NullDeviceStrategy here...?
+public class SwitchBetweenDevicesStrategy implements StateDeviceStrategy {
+	private final DeviceStrategy srcStrategy;
+	private final DeviceStrategy dstStrategy;
+	private final boolean isSrcDevice;
 	
-	public SwitchBetweenDevicesStrategy(final DeviceStrategy mtpStrategy,
-			final DeviceStrategy pcStrategy) {
-		this.mtpStrategy = mtpStrategy;
-		this.pcStrategy = pcStrategy;
+	public SwitchBetweenDevicesStrategy(final DeviceStrategy srcStrategy, final DeviceStrategy dstStrategy,
+			final boolean isSrcDevice) {
+		this.srcStrategy = srcStrategy;
+		this.dstStrategy = dstStrategy;
+		this.isSrcDevice = isSrcDevice;
 	}
 
 	@Override
 	public void copyMusicToDst(FileWrapper newMusic) throws IOException {
-		// Iff. source and destination are on the PC, then use pcStrategy. Otherwise, use mtpStrategy.
-		if (currentSrcState.equals(currentDstState) && currentSrcState.equals(pcStrategy)) {
-			pcStrategy.copyMusicToDst(newMusic);
+		if (isSrcDevice) {
+			srcStrategy.copyMusicToDst(newMusic);
 		} else {
-			mtpStrategy.copyMusicToDst(newMusic);
+			dstStrategy.copyMusicToDst(newMusic);
 		}
-	}
-	
-	@Override
-	public FileWrapper getSrcFolder() {
-		return currentSrcState.getFolder();
-	}
-	
-	@Override
-	public FileWrapper getDstFolder() {
-		return currentDstState.getFolder();
-	}
-
-	@Override
-	public void setSrcAsMTPDevice(boolean isDevice) {
-		currentSrcState = (isDevice ? mtpStrategy : pcStrategy);
-	}
-
-	@Override
-	public void setDstAsMTPDevice(boolean isDevice) {
-		currentDstState = (isDevice ? mtpStrategy : pcStrategy);
 	}
 }
