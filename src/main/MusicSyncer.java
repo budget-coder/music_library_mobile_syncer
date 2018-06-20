@@ -17,70 +17,64 @@ import java.util.List;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 
-import org.jaudiotagger.audio.AudioFile;
-import org.jaudiotagger.audio.AudioFileIO;
-import org.jaudiotagger.audio.exceptions.CannotReadException;
-import org.jaudiotagger.audio.exceptions.CannotWriteException;
-import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
-import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
-import org.jaudiotagger.audio.mp3.MP3File;
 import org.jaudiotagger.tag.FieldKey;
-import org.jaudiotagger.tag.Tag;
-import org.jaudiotagger.tag.TagException;
-import org.jaudiotagger.tag.id3.ID3v23Frames;
 import org.jaudiotagger.tag.images.Artwork;
 
 import data.DataClass;
 import data.DoubleWrapper;
 import filesystem.MTPDeviceStrategy;
 import filesystem.PCDeviceStrategy;
+import framework.DeviceStrategy;
 import framework.FileWrapper;
 import framework.StateDeviceStrategy;
-import jmtp.PortableDeviceStorageObject;
-import util.MurmurHash3;
 
 public class MusicSyncer {
-    private final File srcFolder;
+    private final FileWrapper srcFolder;
     private final FileWrapper dstFolder;
     private boolean optionAddNewMusic;
     private boolean optionDeleteOrphanedMusic;
     private boolean optionSearchInSubdirectories;
     private final SimpleAttributeSet attr;
-    private final StateDeviceStrategy deviceStrategy;
+    private final DeviceStrategy srcStrategy;
+    private final DeviceStrategy dstStrategy;
+    private final StateDeviceStrategy stateDeviceStrategy;
     /**
      * We want to make a list of keys to avoid duplication and reduce the
      * likelihood of the programmer forgetting to check for a key. This list
      * will NOT be able to be modified after creation as this will add bugs.
      */
-    private final List<FieldKey> listOfFieldKeys;
+    // TODO DISC_NO disabled until it can be looked up on an MTP device
+    private final List<FieldKey> listOfFieldKeys = Collections.unmodifiableList(Arrays.asList(
+            FieldKey.TITLE, FieldKey.ARTIST,
+            FieldKey.ALBUM_ARTIST,
+            FieldKey.ALBUM, FieldKey.YEAR,
+            FieldKey.TRACK, //FieldKey.DISC_NO,
+            FieldKey.GENRE, FieldKey.COMPOSER));
+	
+    // TODO Temporary measure for getting artwork on PC. On mtp, this is used to
+	// ignore artwork because I do not know how to get artwork from an mtp device
+	// (unless completely assumed to be android...)
+	private boolean isSrcDevice;
+	private boolean isDstDevice;
     
-    public MusicSyncer(String srcFolderStr, String dstFolderStr,
-    		PortableDeviceStorageObject dstMTPStorage) {
+    public MusicSyncer(String srcFolderStr, String dstFolderStr, boolean isSrcDevice, boolean isDstDevice) {
     	srcFolderStr = srcFolderStr.replace('\\', '/');
     	dstFolderStr = dstFolderStr.replace('\\', '/');
-    	// TODO So far, only the target can be an MTP device (notice the argument to the
-    	// strats). Should it be changed?
-    	
-    	
-    	deviceStrategy = new SwitchBetweenDevicesStrategy(
-				new MTPDeviceStrategy(dstMTPStorage, dstFolderStr),
-				new PCDeviceStrategy(dstFolderStr));
-    	deviceStrategy.setToPCOrDevice(false); // Default value
-    	srcFolder = new File(srcFolderStr);
-    	dstFolder = deviceStrategy.getDstFolder();
+    	this.isSrcDevice = isSrcDevice;
+    	this.isDstDevice = isDstDevice;
+    	srcStrategy = (isSrcDevice ? new MTPDeviceStrategy(srcFolderStr) : new PCDeviceStrategy(srcFolderStr));
+    	dstStrategy = (isDstDevice ? new MTPDeviceStrategy(dstFolderStr) : new PCDeviceStrategy(dstFolderStr));
+    	// TODO Statedevicestrat is ONLY used to determine whether to use mtp strat. or pc strat when copying...
+		stateDeviceStrategy = new SwitchBetweenDevicesStrategy(srcStrategy, dstStrategy, isSrcDevice);
+    	//deviceStrategy.setToPCOrDevice(false); // Default value.
+    	srcFolder = srcStrategy.getFolder();
+    	dstFolder = dstStrategy.getFolder();
         // Options are false by default.
         optionAddNewMusic = false;
         optionDeleteOrphanedMusic = false;
         optionSearchInSubdirectories = false;
         optionSearchInSubdirectories = false;
         attr = new SimpleAttributeSet();
-        // TODO DISC_NO disabled until it can be looked up on an MTP device 
-        listOfFieldKeys = Collections.unmodifiableList(Arrays.asList(
-                FieldKey.TITLE, FieldKey.ARTIST,
-                FieldKey.ALBUM_ARTIST,
-                FieldKey.ALBUM, FieldKey.YEAR,
-                FieldKey.TRACK, //FieldKey.DISC_NO,
-                FieldKey.GENRE, FieldKey.COMPOSER));
     }
     
     /**
@@ -91,9 +85,8 @@ public class MusicSyncer {
      * @throws InterruptedException
      */
     public void initiate() throws InterruptedException {
-        //if (srcFolder.isDirectory() && dstFolder.isDirectory()) {
-    	if (deviceStrategy.isDstADirectory()) {
-			DoubleWrapper<List<File>, List<FileWrapper>> tuppleModifiedNewMusic = buildMusicListToSync(srcFolder);
+        if (srcFolder.isDirectory() && dstFolder.isDirectory()) {
+			DoubleWrapper<List<FileWrapper>, List<FileWrapper>> tuppleModifiedNewMusic = buildMusicListToSync(srcFolder);
             updateMetaData(tuppleModifiedNewMusic.getArg1(), tuppleModifiedNewMusic.getArg2());
             addNewMusicList(tuppleModifiedNewMusic.getArg2());
         } else {
@@ -103,24 +96,24 @@ public class MusicSyncer {
     }
 
     /**
-     * This method builds a list of music which have been modified since last
-     * sync session. Note that this means if the program cannot find a
-     * previous session file, ALL music will be marked as modified until the
-     * metadata is closely examined.
-     * 
-     * @param currentSrcFolder
-     *            the current source folder. Used to handle nested folders.
-     * @return a tuple of lists containing 1) a list of modified music and 2) a
-     *         list of new music.
-     * @throws InterruptedException
-     */
-    public DoubleWrapper<List<File>, List<FileWrapper>> buildMusicListToSync(File currentSrcFolder)
+	 * This method builds a list of music which have been modified since last sync
+	 * session. Note that this means if the program cannot find a previous session
+	 * file, <b>ALL</b> music will be marked as modified until the metadata is
+	 * closely examined.
+	 * 
+	 * @param currentSrcFolder
+	 *            - the current source folder. Used to handle nested folders.
+	 * @return a tuple of lists containing 1) a list of modified music and 2) a list
+	 *         of new music.
+	 * @throws InterruptedException
+	 */
+    public DoubleWrapper<List<FileWrapper>,List<FileWrapper>> buildMusicListToSync(FileWrapper currentSrcFolder)
             throws InterruptedException {
-    	final File[] listOfSrc = srcFolder.listFiles();
-    	final FileWrapper[] listOfDst = deviceStrategy.listDstFiles();
+    	final FileWrapper[] listOfSrc = srcFolder.listFiles();
+    	final FileWrapper[] listOfDst = dstFolder.listFiles();
         // TODO This call here is useless when it comes to nested folders...
         UI.setMaximumLimitOnProgressBar((listOfSrc.length + listOfDst.length));
-        final List<File> sortedListOfSrc = new ArrayList<>(); // A list with only the modified music.
+        final List<FileWrapper> sortedListOfSrc = new ArrayList<>(); // A list with only the modified music.
         final List<FileWrapper> listOfNewMusic = new ArrayList<>(); // A list with only the music to be added.
         final StringBuilder currentSession = new StringBuilder();
         final List<DoubleWrapper<String, Integer>> lastSession = tryToLoadPreviousSession();
@@ -146,24 +139,27 @@ public class MusicSyncer {
             if (Thread.currentThread().isInterrupted()) {
                 throw new InterruptedException();
             }
-            final File fileEntrySrc = listOfSrc[i];
+            final FileWrapper fileEntrySrc = listOfSrc[i];
             if (optionSearchInSubdirectories && fileEntrySrc.isDirectory()) {
                 // If a folder was found, and the user wants it, then search it.
                 // TODO Will not be tested with the current directory
-                System.out.println("Recursing through folder; THIS SHOULD NOT HAPPEN (FOR NOW)");
-                // Take a backup of the current location, recurse the folder, and then restore the original folder.
-                File currentSrcFolderCopy = currentSrcFolder;
+                System.err.println("Recursing through folder; THIS SHOULD NOT HAPPEN (FOR NOW)");
+                throw new UnsupportedOperationException(getClass().getName() + ": Recursing subdirectories in music folder not implemented yet");
+                /*
+                FileWrapper currentSrcFolderCopy = currentSrcFolder; // Take a backup of the current location
                 currentSrcFolder = fileEntrySrc;
-                buildMusicListToSync(currentSrcFolder);
-                currentSrcFolder = currentSrcFolderCopy;
+                buildMusicListToSync(currentSrcFolder); // Recurse the subdirectory
+                currentSrcFolder = currentSrcFolderCopy; // Restore the original folder.
                 continue;
+                */
             }
             // Get file name and extension, if any.
             final String strFile = fileEntrySrc.getName();
             final int fileExtIndex = strFile.lastIndexOf("."); // If no extension, this will default to -1.
             final String strExt = strFile.substring(fileExtIndex + 1); 
             // We use MurmurHash3 on the file itself to get a unique hash to compare with.
-            byte[] fileEntrySrcBytes = null;
+            /* TODO Somehow find a way to create a unique value for files on PC AND MOTHERFUCKING MTP. Fuck jmtp...
+            byte[] fileEntrySrcBytes = {0};
             try {
                 fileEntrySrcBytes = Files.readAllBytes(fileEntrySrc.toPath());
             } catch (IOException e) { // Will occur if the synchronization is stopped abruptly. 
@@ -171,6 +167,8 @@ public class MusicSyncer {
                 e.printStackTrace();
             }
             final int fileHash = MurmurHash3.murmurhash3_x86_32(fileEntrySrcBytes, 0, strFile.length(), 14);
+            */
+            final int fileHash = 0;
             //final long fileLastMod = fileEntrySrc.lastModified();
             // To make it case-insensitive (and avoid problems with Turkish), convert to uppercase.
             switch (strExt.toUpperCase()) {
@@ -183,48 +181,55 @@ public class MusicSyncer {
                 boolean wasFileLocated = false;
                 if (lastSessionIndex < lastSession.size()) {
                     final boolean isSameFile = lastSession.get(lastSessionIndex).getArg1().equals(strFile);
-                    hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileHash; // TODO Move to else {}?
                     // We assume that, for the most part, most music is unchanged from last session.
                     if (!isSameFile) {
-                        /*
-                         * Although it is not the same file, we have to make
-                         * absolutely sure that it is not further down the last
-                         * session file.
-                         */
+						// Although it is not the same file, we have to make absolutely sure that it is
+						// not further down (or up) the last session file.
                         DoubleWrapper<Boolean, Integer> locateFileWrapper =
                                 tryToLocateFileInPreviouSession(lastSession, lastSessionIndex, strFile);
                         wasFileLocated = locateFileWrapper.getArg1();
                         hasBeenModified = locateFileWrapper.getArg2() != fileHash;
                     } else {
+                    	hasBeenModified = lastSession.get(lastSessionIndex).getArg2() != fileHash;
                         wasFileLocated = true;
                     }
                     if (wasFileLocated) {
-                        /*
-                         * If and only if the file was located, then we can move
-                         * on to the next file entry. This is to avoid skipping
-                         * a file and prematurely finish the last session.
-                         */
+						// If and only if the file was located, then we can move on to the next file
+						// entry. This is to avoid skipping a file and prematurely finish the last
+						// session.
                         lastSessionIndex++;
                     }
                 }
                 // Check if the music exists in dst.
-				FileWrapper fileInDst = deviceStrategy.getFileInstance(dstFolder.getAbsolutePath() + "\\" + strFile);
+                
+                
+                
+                ///////////////////////////////////////////////////////////////////////////////
+				// TODO until hashing or something similar can be implemented for mtp files
+				// (hashing requires a byte array representing the MTPFile...), hasBeenModified
+				// will always be true.
+                ///////////////////////////////////////////////////////////////////////////////
+                hasBeenModified = true;
+                
+                
+                
+                FileWrapper fileInDst = dstStrategy.getFileInstance(dstFolder.getAbsolutePath() + "\\" + strFile);
                 if (wasFileLocated && !hasBeenModified) {
                     UI.updateProgressBar(2);
                     continue;
                 } else if (optionAddNewMusic && !fileInDst.doesFileExist()) {
-                    /*
-                     * If the option was checked, "mark" new music by adding
-                     * them to a list whose contents will be added later. This
-                     * should be the last operation in the whole program because
-                     * it adds unnecessary comparisons (at minimum n-checks!).
-                     */
-                    listOfNewMusic.add(deviceStrategy.getFileInstance(fileEntrySrc.getAbsolutePath()));
-                } else {
+					// If the option was checked, "mark" new music by adding them to a list whose
+					// contents will be added later. This should be the last operation in the whole
+					// program because it adds unnecessary comparisons (at minimum n-checks!).
+                    listOfNewMusic.add(fileEntrySrc);
+                } else if (fileInDst.doesFileExist()){
                     sortedListOfSrc.add(fileEntrySrc);
+                } else {
+                	UI.updateProgressBar(2); // File was not found on dst and the user does not want to add it.
                 }
                 break;
             default:
+            	UI.updateProgressBar(1);
                 break; // "These are not the files you are looking for."
             }
         }
@@ -237,71 +242,92 @@ public class MusicSyncer {
         } catch (IOException e) {
             System.err.println("FATAL: Could not save a list of the music to a .txt file!");
         }
-        return new DoubleWrapper<List<File>, List<FileWrapper>>(sortedListOfSrc, listOfNewMusic);
+        return new DoubleWrapper<List<FileWrapper>, List<FileWrapper>>(sortedListOfSrc, listOfNewMusic);
     }
     
     /**
      * This method inspects the list of music given and examines the metadata,
-     * updating it if necessary.
+     * updating it a change is detected.
      * @param sortedListOfSrc
-     *            a list of modified music to be examined.
+     *            - a list of modified music to be examined.
      * @param listOfNewMusic
-     *            a list of new music to be directly copied from src to dst.
+     *            - a list of new music to be directly copied from src to dst.
      * 
      * @throws InterruptedException
      */
-    public void updateMetaData(List<File> sortedListOfSrc, List<FileWrapper> listOfNewMusic)
+    public void updateMetaData(List<FileWrapper> sortedListOfSrc, List<FileWrapper> listOfNewMusic)
             throws InterruptedException {
         StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
         UI.writeStatusMsg("Updating metadata...", attr);
         
-        for (final File fileEntrySorted : sortedListOfSrc) {
+        for (final FileWrapper fileSrc : sortedListOfSrc) {
             if (Thread.currentThread().isInterrupted()) {
                 throw new InterruptedException();
             }
-            final String strFile = fileEntrySorted.getName();
-            final int index = strFile.lastIndexOf("."); // If there is no extension, this will default to -1.
-            final String strExt = strFile.substring(index + 1);
-            boolean isMP3 = strExt.toUpperCase().equals("MP3") ? true : false; 
-            FileWrapper mpXInDst = deviceStrategy.getFileInstance(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
-            try {
-                // TODO should fix the error below with isMP3 == false always. Check by changing year.
-                updateMusicMetaData(fileEntrySorted, mpXInDst, listOfNewMusic, isMP3);
-                //switch (strExt.toUpperCase()) {
-                //case "MP3":
-                //    isMP3 = true;
-                //case "M4A":
-                //    // M4A are structurally the same as MP4 files.
-                //    isMP3 = false;
-                //    File mpXInDst = new File(dstFolder.getAbsolutePath() + "\\" + fileEntrySorted.getName());
-                //    updateMusicMetaData(fileEntrySorted, mpXInDst, listOfNewMusic, isMP3);
-                //    break;
-                //default:
-                //    break; // This was not music
-                //}
-            } catch (InvalidAudioFrameException | CannotReadException
-                    | IOException | TagException | ReadOnlyFileException
-                    | CannotWriteException | ClassCastException e) {
-                // TODO Use a logger just like in hotciv/cave
-                System.err.println("FATAL: " + e.toString());
+            // Create a FileWrapper of the file at destination.
+            FileWrapper fileDst = dstStrategy.getFileInstance(dstFolder.getAbsolutePath() + "\\" + fileSrc.getName());
+            
+			// Before getting every relevant metadata, we check the length of both music
+			// files. If the mod. version is not the same, then the music data has been
+			// modified. The only fix is to replace and return.
+            if (!fileSrc.getDuration().equals(fileDst.getDuration())) {
+            	listOfNewMusic.add(fileSrc);
+            }
+            else {
+            	// Get each relevant tag from src and dst version of the file and save
+                // them in lists for later comparisons.
+            	for (FieldKey fieldKey : listOfFieldKeys) {
+            		final String tagValueSrc = fileSrc.getTagData(fieldKey);
+                	final String tagValueDst = fileDst.getTagData(fieldKey);
+					if (!tagValueSrc.equals(DataClass.ERROR_STRING) && !tagValueDst.equals(DataClass.ERROR_STRING)
+							&& !tagValueSrc.equals(tagValueDst)) {
+                		fileDst.changeTag(fieldKey, tagValueSrc);
+                	}
+            	}
+				// Artworks, however, are a special case. Notice that we are only interested in
+				// the first artwork as the others are assumed to be mistakes since they are not
+				// shown when the music is played.
+            	
+            	// TODO This check is very, very necessary as I can only
+            	// acquire artwork if the music is on the pc. If it's on an MTP
+            	// device, then I have yet to find a method on how to get it.
+            	// jmtp is not documented at all...
+            	if (!isSrcDevice && !isDstDevice) {
+	                final Artwork srcArtwork = fileSrc.getAlbumArt();
+	                final Artwork dstArtwork = fileDst.getAlbumArt();
+	                if (srcArtwork != null && dstArtwork == null) {
+	                	fileDst.changeAlbumArt(srcArtwork);
+	                } else if (srcArtwork == null && dstArtwork != null) {
+	                	fileDst.changeAlbumArt(null); // Delete artwork
+	                } else if (srcArtwork != null && dstArtwork != null) {
+	                    // Only get the first artwork.
+	                    byte[] srcArtworkArr = srcArtwork.getBinaryData();
+	                    byte[] dstArtworkArr = dstArtwork.getBinaryData();
+	                    if (!Arrays.equals(srcArtworkArr, dstArtworkArr)) {
+	                    	fileDst.changeAlbumArt(null); // Delete dst artwork first
+	                    	fileDst.changeAlbumArt(srcArtwork); // Add new artwork from src.
+	                    }
+	                }
+            	}
+            	fileDst.applyTagChanges();
             }
             UI.updateProgressBar(2);
         }
     }
 
     /**
-     * Locate the current file in the previous session file.
-     * 
-     * @param lastSession
-     *            our last session file where each entry contains a name and a
-     *            last modified.
-     * @param lastSessionIndex
-     *            the current index describing our location in src.
-     * @param strFile
-     *            the name of the current file.
-     * @return a tuple containing a boolean for whether the file was found and
-     *         its last modified date. If it was not found, then the date is 0.
-     */
+	 * Locate the current file in the previous session file.
+	 * 
+	 * @param lastSession
+	 *            - our last session file where each entry contains a name and a
+	 *            last modified.
+	 * @param lastSessionIndex
+	 *            - the current index describing our location in src.
+	 * @param strFile
+	 *            - the name of the current file.
+	 * @return a tuple containing a boolean for whether the file was found and its
+	 *         last modified date. If it was not found, then the date is 0.
+	 */
     public DoubleWrapper<Boolean, Integer> tryToLocateFileInPreviouSession(
             List<DoubleWrapper<String, Integer>> lastSession, int lastSessionIndex,
             String strFile) {
@@ -338,146 +364,11 @@ public class MusicSyncer {
         return new DoubleWrapper<Boolean, Integer>(wasFileLocated, 0);
     }
     
-    /**
-     * Update the appropriate metadata fields if a change is detected. If no
-     * change is detected, then overwrite the file (i.e. a fail-safe) as this
-     * method should only be called when you know the file in dst has been
-     * modified.
-     * 
-     * @param fileSrc
-     *            the file in src.
-     * @param fileDst
-     *            the file in dst.
-     * @param listOfNewMusic
-     *            the list of new music to be added directly.
-     * @param isMP3
-     *            a boolean to determine whether it is an mp3 or m4a/mp4 file.
-     * @throws CannotReadException
-     * @throws IOException
-     * @throws TagException
-     * @throws ReadOnlyFileException
-     * @throws InvalidAudioFrameException
-     * @throws CannotWriteException
-     * @throws ClassCastException
-     */
-    @SuppressWarnings("unchecked")
-    public <MusicTag extends Tag> void updateMusicMetaData(File fileSrc,
-            FileWrapper fileDst, List<FileWrapper> listOfNewMusic, boolean isMP3)
-            throws CannotReadException, IOException, TagException,
-            ReadOnlyFileException, InvalidAudioFrameException,
-            CannotWriteException, ClassCastException {
-        // Here we need to make a wrapper class because we need the tag field
-        // when updating music.
-        List<DoubleWrapper<FieldKey, String>> listOfTagsSrc = new ArrayList<>();
-        List<DoubleWrapper<FieldKey, String>> listOfTagsDst = new ArrayList<>();
-        // Read metadata from the files.
-        MusicTag musicTagSrc;
-        AudioFile musicDstWriter;
-        MusicTag musicTagDst;
-        
-        if (isMP3) {
-            musicTagSrc = (MusicTag) ((MP3File) AudioFileIO.read(fileSrc)).getID3v2Tag();
-         // TODO TEMP. FIX TO MAKE IT WORK FOR PC ONLY BEFORE MTP IS IMPLEMENTED.
-            musicDstWriter = AudioFileIO.read(new File(fileDst.getAbsolutePath()));
-            //musicDstWriter = AudioFileIO.read(fileDst);
-            musicTagDst = (MusicTag) ((MP3File) musicDstWriter).getID3v2Tag();
-        } else {
-            musicTagSrc = (MusicTag) AudioFileIO.read(fileSrc).getTag();
-         // TODO TEMP. FIX TO MAKE IT WORK FOR PC ONLY BEFORE MTP IS IMPLEMENTED.
-            musicDstWriter = AudioFileIO.read(new File(fileDst.getAbsolutePath()));
-            musicTagDst = (MusicTag) musicDstWriter.getTag();
-        }
-        /*
-         * Before getting every relevant metadata, we check the length of both
-         * music files. If the mod. version is not the same, then the music data
-         * has been modified. The only fix is to replace and return.
-         */
-        String musicLengthSrc = musicTagSrc.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH);
-        String musicLengthDst = musicTagDst.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH);
-        if (!musicLengthSrc.equals(musicLengthDst)) {
-            listOfNewMusic.add(deviceStrategy.getFileInstance(fileSrc.getAbsolutePath()));
-            return;
-        }
-        // Get each relevant tag from src and dst version of the file and save
-        // them in lists for later comparisons.
-        final ID3v23Frames id3v23Frame = ID3v23Frames.getInstanceOf();
-        for (FieldKey fieldKey : listOfFieldKeys) {
-            // TODO Ugh, duplication. Can this be done any smarter?
-            if (isMP3) {
-                /* TODO bug report to Paul Taylor, author of jaudiotagger
-                 * getFirst(FieldKey key) does NOT give the right year; it
-                 * should be "TYER" and not "TDRC". We get "TYER" by getting it
-                 * from the frame ID3v23Frames.FRAME_ID_V3_TYER and this is done
-                 * as follows.
-                 */
-                String fieldName = id3v23Frame.getId3KeyFromGenericKey(fieldKey).getFieldName();
-                listOfTagsSrc.add(new DoubleWrapper<>(fieldKey, musicTagSrc.getFirst(fieldName)));
-                listOfTagsDst.add(new DoubleWrapper<>(fieldKey, musicTagDst.getFirst(fieldName)));
-            } else {
-                listOfTagsSrc.add(new DoubleWrapper<>(fieldKey, musicTagSrc.getFirst(fieldKey)));
-                listOfTagsDst.add(new DoubleWrapper<>(fieldKey, musicTagDst.getFirst(fieldKey)));
-            }
-        }
-        // Now for the comparisons.
-        DoubleWrapper<FieldKey, String> keyTagFile;
-        //boolean didIDetectAChange = false;
-        for (int i = 0; i < listOfTagsSrc.size(); i++) {
-            keyTagFile = listOfTagsDst.get(i);
-            if (!listOfTagsSrc.get(i).getArg2().equals(keyTagFile.getArg2())) {
-                // Update metadata of the target music file (but do not write it yet!).
-                musicTagDst.setField(keyTagFile.getArg1(), listOfTagsSrc.get(i).getArg2());
-                //didIDetectAChange = true;
-            }
-        }
-        /*
-         * Artworks, however, are a special case. Notice that we are only
-         * interested in the first artwork as the others are assumed to be
-         * mistakes since they are not shown when the music is played.
-         */
-        Artwork srcArtwork = musicTagSrc.getFirstArtwork();
-        Artwork dstArtwork = musicTagDst.getFirstArtwork();
-        if (srcArtwork != null && dstArtwork == null) {
-            musicTagDst.setField(srcArtwork);
-            //didIDetectAChange = true;
-        } else if (srcArtwork == null && dstArtwork != null) {
-            musicTagDst.deleteArtworkField();
-            //didIDetectAChange = true;
-        } else if (srcArtwork != null && dstArtwork != null) {
-            // Only get the first artwork.
-            byte[] srcArtworkArr = srcArtwork.getBinaryData();
-            byte[] dstArtworkArr = dstArtwork.getBinaryData();
-            if (!Arrays.equals(srcArtworkArr, dstArtworkArr)) {
-                musicTagDst.deleteArtworkField();
-                musicTagDst.setField(srcArtwork);
-                //didIDetectAChange = true;
-            }
-        }
-        //if (!didIDetectAChange) {
-        //    /*
-        //     * No metadata change was detected. Our filter might not be
-        //     * comprehensive enough (most likely as this filter was made for
-        //     * myself). However, we would not end in this method if SOMETHING
-        //     * had not changed. So we will just replace the whole file on dst
-        //     * instead.
-        //     */
-        //    listOfNewMusic.add(fileSrc);
-        //} else {
-        //    // Write the metadata once and for all.
-        //    musicDstWriter.setTag(musicTagDst);
-        //    musicDstWriter.commit();
-        //    UI.updateProgressBar(2);
-        //}
-        // Write the metadata once and for all.
-        musicDstWriter.setTag(musicTagDst);
-        musicDstWriter.commit();
-        //UI.updateProgressBar(2);
-    }
-
 	/**
 	 * This method copies new music to {@link #dstFolder}.
 	 * 
 	 * @param listOfNewMusic
-	 *            a list of new music to be added directly.
+	 *            - a list of new music to be added directly.
 	 * @throws InterruptedException
 	 */
     public void addNewMusicList(List<FileWrapper> listOfNewMusic) throws InterruptedException {
@@ -488,7 +379,7 @@ public class MusicSyncer {
             }
             String strFile = newMusic.getName();
             try {
-                deviceStrategy.copyMusicToDst(newMusic);
+                stateDeviceStrategy.copyMusicToDst(newMusic);
                 UI.writeStatusMsg("Added " + strFile + ".", attr);
             } catch (IOException e) {
                 StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
@@ -505,9 +396,9 @@ public class MusicSyncer {
      * more comparisons and bugs out the sorted list.
      * 
      * @param listOfFolder
-     *            a list of files in the specified folder
+     *            - a list of files in the specified folder
      * @param pathToFolder
-     *            the path to the folder.
+     *            - the path to the folder.
      * @throws InterruptedException 
      */
     public void lookForAndDeleteOrphanedMusicInDst(FileWrapper[] listOfFolder, String pathToFolder) throws InterruptedException {
@@ -515,17 +406,29 @@ public class MusicSyncer {
             if (Thread.currentThread().isInterrupted()) {
                 throw new InterruptedException();
             }
-			FileWrapper fileOnSrc = deviceStrategy.getFileInstance(pathToFolder + "\\" + fileEntryDst.getName());
-            if (fileOnSrc.doesFileExist()) {
-                continue;
-            }
-            if (fileEntryDst.deleteFile()) {
-                StyleConstants.setForeground(attr, DataClass.DEL_MUSIC_COLOR);
-                UI.writeStatusMsg("Deleted " + fileEntryDst.getName(), attr);
-                UI.updateProgressBar(1);
-            } else {
-                StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
-                UI.writeStatusMsg("Could not delete " + fileEntryDst.getName() + ".", attr);
+            // Check if it's music first. If it is not, then skip it.
+            final String strFile = fileEntryDst.getName();
+            final int fileExtIndex = strFile.lastIndexOf("."); // If no extension, this will default to -1.
+            final String strExt = strFile.substring(fileExtIndex + 1); 
+            switch (strExt.toUpperCase()) {
+            // Exploit the concept of fallthrough.
+            case "MP3":
+            case "M4A":
+				FileWrapper fileOnSrc = srcStrategy.getFileInstance(pathToFolder + "\\" + fileEntryDst.getName());
+	            if (fileOnSrc.doesFileExist()) {
+	                continue;
+	            }
+	            if (fileEntryDst.deleteFile()) {
+	                StyleConstants.setForeground(attr, DataClass.DEL_MUSIC_COLOR);
+	                UI.writeStatusMsg("Deleted " + fileEntryDst.getName(), attr);
+	                UI.updateProgressBar(1);
+	            } else {
+	                StyleConstants.setForeground(attr, DataClass.ERROR_COLOR);
+	                UI.writeStatusMsg("Could not delete " + fileEntryDst.getName() + ".", attr);
+	            }
+            default:
+            	UI.updateProgressBar(1); // This was not a music file. Just skip it.
+            	break;
             }
         }
     }
@@ -587,11 +490,11 @@ public class MusicSyncer {
      * file correctly.
      * 
      * @param currentSession
-     *            A StringBuilder representation of the current session file.
+     *            - A StringBuilder representation of the current session file.
      * @param strFile
-     *            the current file.
+     *            - the current file.
      * @param fileLastMod
-     *            the last modified date of the file.
+     *            - the last modified date of the file.
      */
     private void updateCurrentSession(StringBuilder currentSession, String strFile, long fileLastMod) {
         currentSession.append(strFile + "\n");
@@ -609,8 +512,4 @@ public class MusicSyncer {
     public void setSearchInSubdirectories(boolean option) {
         optionSearchInSubdirectories = option;
     }
-
-	public void setUsePortableDevice(boolean option) {
-		deviceStrategy.setToPCOrDevice(option);
-	}
 }
