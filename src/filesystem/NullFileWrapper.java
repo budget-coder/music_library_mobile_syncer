@@ -1,5 +1,9 @@
 package filesystem;
 
+import org.jaudiotagger.tag.FieldKey;
+import org.jaudiotagger.tag.images.Artwork;
+
+import data.DataClass;
 import framework.FileWrapper;
 
 public class NullFileWrapper implements FileWrapper {
@@ -12,12 +16,12 @@ public class NullFileWrapper implements FileWrapper {
 
 	@Override
 	public String getName() {
-		return "";
+		return DataClass.ERROR_STRING;
 	}
 
 	@Override
 	public String getAbsolutePath() {
-		return "";
+		return DataClass.ERROR_STRING;
 	}
 
 	@Override
@@ -33,5 +37,32 @@ public class NullFileWrapper implements FileWrapper {
 	@Override
 	public boolean doesFileExist() {
 		return false;
+	}
+
+	@Override
+	public String getDuration() {
+		return DataClass.ERROR_STRING;
+	}
+
+	@Override
+	public String getTagData(FieldKey fieldKey) {
+		return DataClass.ERROR_STRING;
+	}
+
+	@Override
+	public void changeTag(FieldKey fieldKey, String tagValueSrc) { // Do nothing
+	}
+
+	@Override
+	public void applyTagChanges() { // Do nothing
+	}
+
+	@Override
+	public Artwork getAlbumArt() {
+		return null; // TODO Use null pattern for Artwork
+	}
+
+	@Override
+	public void changeAlbumArt(Artwork newArt) { // Do nothing
 	}
 }
