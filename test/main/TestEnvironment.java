@@ -30,8 +30,8 @@ public class TestEnvironment {
         MTPFileManager mtpFileManager = new MTPFileManager(mtpDevice);
         mtpFileManager.openDevice();
         //devices[0].open(); // TODO Show list to user...
-        //testLocateAndPrintMusicTags(mtpDevice);
-        testRecursiveFolderLookup(mtpDevice);
+        testLocateAndPrintMusicTags(mtpDevice);
+        //testRecursiveFolderLookup(mtpDevice);
     }
     
     private static void testRecursiveFolderLookup(PortableDevice mtpDevice) {
@@ -89,11 +89,14 @@ public class TestEnvironment {
 								+ "Disc_no: ???" + ", Genre: " + audioFile.getGenre() + "\n"
 								+ "Composer: " + audioFile.getComposer() + ", Artwork: ???" + "\n"
 								+ "Length: " + audioFile.getDuration() + ", TEST: " + audioFile.getUseCount());
+						/*
 						System.out.println("Attempting to acquire album artwork...");
 						// Seems to store -1. Possible that biginteger does not work with artwork
 						byte[] artwork = audioFile.getArtwork(); // Keeps throwing Win32WPDDefines.ERROR_NOT_FOUND
 						System.out.println("Acquired the artwork: " + artwork.toString());
-						return;
+						*/
+						System.out.println();
+						System.out.println();
 					} else {
 						System.out.println("The file is NOT an audio instance...");
 					}
