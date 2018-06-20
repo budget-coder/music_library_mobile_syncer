@@ -12,9 +12,10 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -95,6 +96,7 @@ public class UI extends JFrame {
     private final String windowHeightAttr;
     private int windowHeight = -1;
     private static Robot robotKeepPCAwake;
+    private static boolean shouldRobotStop = false;
 
     /**
      * Launch the application.
@@ -262,6 +264,10 @@ public class UI extends JFrame {
             public void actionPerformed(ActionEvent arg0) {
                 // Stop execution if the button was pressed while it was running.
                 if (startButton.getText().equals("Stop!")) {
+					// If the application is interrupted while mouseMove() is called on the robot,
+					// then the InterruptedException WILL be caught, letting the programming
+					// continue instead of stopping!
+                	shouldRobotStop = true;
                     musicSyncerThread.interrupt();
                     progressBarThread.interrupt();
                 } else {
@@ -301,6 +307,7 @@ public class UI extends JFrame {
                             musicSyncer.setSearchInSubdirectories(searchInSubdirsChkBox.isSelected());
                             try {
                                 musicSyncer.initiate();
+                                progressBarValue = progressBar.getMaximum(); // Set to max in case MusicSyncer counted wrong
                             } catch (InterruptedException e) {
                                 SimpleAttributeSet attr = new SimpleAttributeSet();
                                 StyleConstants.setForeground(attr, DataClass.INFO_COLOR);
@@ -317,6 +324,8 @@ public class UI extends JFrame {
                                     (System.currentTimeMillis() - timeStart) + " ms.", attr);
                         }
                     };
+                    // Tell the robot that it can resume its movements
+                    shouldRobotStop = false;
                     musicSyncerThread = new Thread(musicSyncerRunnable);
                     musicSyncerThread.start();
                 }
@@ -329,8 +338,10 @@ public class UI extends JFrame {
                         while (progressBarValue < progressBar.getMaximum()) {
                             try {
                                 readProgressSemaphore.acquire();
-                            } catch (InterruptedException ignore) {}
-                            progressBar.setValue(progressBarValue);
+                                progressBar.setValue(progressBarValue);
+                            } catch (InterruptedException ignore) {
+                            	return; // Exit the method instead of setting progressBar to max. value.
+                            }
                         }
                         // The syncing is done; set the bar to 100 %.
                         progressBar.setValue(progressBar.getMaximum());
@@ -347,7 +358,6 @@ public class UI extends JFrame {
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
             public void run() {
-            	System.out.println("Src/Dst paths: " + txtSrcDir.getText() + ", " + txtDstDir.getText());
             	final List<String> settings = Arrays.asList(srcFolderAttr
                         + txtSrcDir.getText() + System.lineSeparator() + dstFolderAttr
                         + txtDstDir.getText() + System.lineSeparator() + addNewMusicAttr
@@ -375,11 +385,11 @@ public class UI extends JFrame {
         // Create robot for keeping the pc awake when syncing.
         try {
             robotKeepPCAwake = new Robot();
+            robotKeepPCAwake.setAutoDelay(0);
         } catch (AWTException e) {
             System.err.println("FATAL: Could not create a robot for keeping the computer awake "
                     + "while syncing. Your platform does not allow low-level input control.");
         }
-        robotKeepPCAwake.setAutoDelay(0);
     }
 
 	/**
@@ -388,13 +398,18 @@ public class UI extends JFrame {
      * 
      * @param increment
      *            - the value to increment the progress bar's value by.
+	 * @throws InterruptedException 
      */
-    public static void updateProgressBar(final int increment) {
+    public static void updateProgressBar(final int increment) throws InterruptedException {
     	// Move mouse to same location, effectively keeping the PC awake.
     	robotKeepPCAwake.mouseMove(MouseInfo.getPointerInfo().getLocation().x,
     			MouseInfo.getPointerInfo().getLocation().y);
         readProgressSemaphore.release();
         progressBarValue += increment;
+        // Check if robot is supposed to stop
+        if (shouldRobotStop) {
+        	throw new InterruptedException("Robot: Stop button was pressed.");
+        }
     }
     
     public static void setMaximumLimitOnProgressBar(final int max) {
@@ -414,8 +429,10 @@ public class UI extends JFrame {
         if (!settings.exists()) {
             returnArray = new String[]{"", ""};
         } else {
-            // Try-with-ressources to ensure that the stream is closed.
-            try (BufferedReader br = new BufferedReader(new FileReader(settings))) {
+        	// Try-with-ressources to ensure that the stream is closed. Notice that
+            // we do not just make a new instance of FileReader because it uses
+            // Java's platform default encoding, and that is not always correct!
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(settings), Charset.forName("UTF-8")))) {
                 String line = br.readLine();
                 while (line != null) {
                     if (line.startsWith(srcFolderAttr)) {
