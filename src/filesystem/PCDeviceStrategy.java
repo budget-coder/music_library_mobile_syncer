@@ -42,8 +42,13 @@ public class PCDeviceStrategy implements DeviceStrategy {
 	}
 
 	@Override
-	public void copyMusicToDst(FileWrapper newMusic) throws IOException {
-		Path targetPath = Paths.get(dstFolderPC.getAbsolutePath()).resolve(newMusic.getName());
+	public void copyMusicToCurrentFolder(FileWrapper newMusic) throws IOException {
+		copyMusicToSpecificFolder(newMusic, dstFolderPC.getAbsolutePath());
+	}
+
+	@Override
+	public void copyMusicToSpecificFolder(FileWrapper newMusic, String pathToFolder) throws IOException {
+		Path targetPath = Paths.get(pathToFolder).resolve(newMusic.getName());
 		Files.copy(Paths.get(newMusic.getAbsolutePath()), targetPath,
 					StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
 	}

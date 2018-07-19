@@ -11,5 +11,7 @@ public interface DeviceStrategy {
 
 	public FileWrapper getFileInstance(String path);
 	
-	public void copyMusicToDst(FileWrapper newMusic) throws IOException;
+	public void copyMusicToCurrentFolder(FileWrapper newMusic) throws IOException;
+	
+	public void copyMusicToSpecificFolder(FileWrapper newMusic, String pathToFolder) throws IOException;
 }

@@ -1,15 +1,20 @@
 package filesystem;
 
+import java.io.File;
 import java.io.IOException;
 
+import be.derycke.pieter.com.COMException;
 import framework.DeviceStrategy;
 import framework.FileWrapper;
+import jmtp.DeviceAlreadyOpenedException;
 import jmtp.PortableDevice;
 import jmtp.PortableDeviceStorageObject;
+import util.MTPFileManager;
 import util.MTPUtil;
 
 public class MTPDeviceStrategy implements DeviceStrategy {
 	private PortableDevice device;
+	private MTPFileManager fileManager;
 	private PortableDeviceStorageObject storage;
 	private final MTPFile dstFolderMTP;
 	private static final MTPFile NULL_MTPFILE = new MTPFile(new NullPortableDeviceFolderObject(), "");
@@ -27,11 +32,11 @@ public class MTPDeviceStrategy implements DeviceStrategy {
 		final String strDevice;
 		final String strNoDevice;
 		final String strStorage;
-		if (dstFolder.indexOf('/') > 0) {
-			strDevice = dstFolder.substring(0, dstFolder.indexOf('/'));
-			strNoDevice = dstFolder.substring(strDevice.length()+1); // +1 skips '/'
-			if (strNoDevice.indexOf('/') > 0) {
-				strStorage = strNoDevice.substring(0, strNoDevice.indexOf('/'));
+		if (dstFolder.indexOf(File.separatorChar) > 0) {
+			strDevice = dstFolder.substring(0, dstFolder.indexOf(File.separatorChar));
+			strNoDevice = dstFolder.substring(strDevice.length()+1); // +1 skips separator char
+			if (strNoDevice.indexOf(File.separatorChar) > 0) {
+				strStorage = strNoDevice.substring(0, strNoDevice.indexOf(File.separatorChar));
 			} else {
 				dstFolderMTP = NULL_MTPFILE; // Invalid path. Create invalid MTPFile.
 				return;
@@ -45,6 +50,14 @@ public class MTPDeviceStrategy implements DeviceStrategy {
 		for (PortableDevice device : MTPUtil.getDevices()) {
 			if (device.getFriendlyName().equals(strDevice)) {
 				this.device = device;
+				try {
+					device.open(); // Establish connection to device before using it!
+				} catch (DeviceAlreadyOpenedException e) {
+					// TODO PortableDevice.close() does not close a device, meaning that this
+					// exception will always be thrown the second time a device is opened during
+					// runtime.
+				}
+				fileManager = new MTPFileManager(device);
 				for (PortableDeviceStorageObject storage : MTPUtil.getDeviceStorages(device)) {
 					if (storage.getName().equals(strStorage)) {
 						this.storage = storage;
@@ -56,7 +69,7 @@ public class MTPDeviceStrategy implements DeviceStrategy {
 		} // for-each-device
 		if (device != null && storage != null) {
 			// Success scenario: both device and storage are valid. Pass the pointed-to folder/file along.
-			final String strOnlyFolders = strNoDevice.substring(strStorage.length()+1); // +1 skips '/'
+			final String strOnlyFolders = strNoDevice.substring(strStorage.length()+1); // +1 skips separator char
 			dstFolderMTP = new MTPFile(storage, strOnlyFolders);
 		} else {
 			dstFolderMTP = NULL_MTPFILE;
@@ -90,10 +103,26 @@ public class MTPDeviceStrategy implements DeviceStrategy {
 	}
 
 	@Override
-	public void copyMusicToDst(FileWrapper newMusic) throws IOException {
-		// TODO Auto-generated method stub
-		throw new UnsupportedOperationException(getClass() + ": copyMusicToDst not implemeneted yet");
-
+	public void copyMusicToCurrentFolder(FileWrapper newMusic) throws IOException {
+		if (dstFolderMTP.isDirectory()) {
+			try {
+				fileManager.addFile(new File(newMusic.getAbsolutePath()), dstFolderMTP.getAbsolutePath());
+			} catch (COMException e) {
+				// Not sure how to handle a COMException as it does not seem to be thrown anywhere.
+				System.err.println("FATAL: COMException occured in " + getClass().getName() + ". Throwing IOException...");
+				throw new IOException(e);
+			}
+		}
 	}
 
+	@Override
+	public void copyMusicToSpecificFolder(FileWrapper newMusic, String pathToFolderOnPC) throws IOException {
+		try {
+			fileManager.getFile(newMusic.getName(), pathToFolderOnPC);
+		} catch (COMException e) {
+			// Not sure how to handle a COMException as it does not seem to be thrown anywhere.
+			System.err.println("FATAL: COMException occured in " + getClass().getName() + ". Throwing IOException...");
+			throw new IOException(e);
+		}
+	}
 }
