@@ -35,7 +35,7 @@ import util.MTPUtil;
 
 public class UIForMTPFileSystem {
 	private JDialog frame;
-	private static final String BASE_PATH_ICONS = System.getProperty("user.dir") + "\\icons\\";
+	private static final String BASE_PATH_ICONS = System.getProperty("user.dir") + File.separatorChar + "icons" + File.separatorChar;
 	private static final ImageIcon ICON_DEVICE = new ImageIcon(BASE_PATH_ICONS + "device.png");
 	private static final ImageIcon ICON_STORAGE = new ImageIcon(BASE_PATH_ICONS + "storage.png");
 	private static final ImageIcon ICON_FOLDER = new ImageIcon(BASE_PATH_ICONS + "folder.png");
@@ -127,7 +127,6 @@ public class UIForMTPFileSystem {
 				            currPath += File.separator;
 				        }
 				    }
-					System.out.println("Path to selected node: " + currPath);
 					// Store the folder path in a field variable. 
 					strChosenFolder = currPath;
 				}
