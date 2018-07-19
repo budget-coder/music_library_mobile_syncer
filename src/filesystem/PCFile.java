@@ -5,6 +5,7 @@ import java.io.IOException;
 
 import org.jaudiotagger.audio.AudioFile;
 import org.jaudiotagger.audio.AudioFileIO;
+import org.jaudiotagger.audio.AudioHeader;
 import org.jaudiotagger.audio.exceptions.CannotReadException;
 import org.jaudiotagger.audio.exceptions.CannotWriteException;
 import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
@@ -26,13 +27,14 @@ public class PCFile implements FileWrapper {
 	private final String strExt;
 	private AudioFile audioFile;
 	private Tag musicTag;
+	private AudioHeader musicHeader;
 	private boolean isAudioDataInitialized = false;
 	private ID3v23Frames id3v23Frame;
 	
 	public PCFile(String pathToFile) {
 		file = new File(pathToFile);
 		final int index = pathToFile.lastIndexOf("."); // If there is no extension, this will default to -1.
-		strExt = pathToFile.substring(index + 1);		
+		strExt = pathToFile.substring(index + 1).toUpperCase();
 	}
 
 	@Override
@@ -92,8 +94,9 @@ public class PCFile implements FileWrapper {
 				if (strExt.equals("MP3")) {
 					musicTag = ((MP3File) audioFile).getID3v2Tag();
 				} else {
-					musicTag = AudioFileIO.read(file).getTag();
+					musicTag = audioFile.getTag();
 				}
+				musicHeader = audioFile.getAudioHeader();
 				id3v23Frame = ID3v23Frames.getInstanceOf();
 			} catch (CannotReadException | TagException | ReadOnlyFileException
 					| InvalidAudioFrameException e) {
@@ -115,7 +118,11 @@ public class PCFile implements FileWrapper {
 	@Override
 	public String getDuration() throws InterruptedException {
 		if (initializeMusicTagIfNecessary()) {
-			return musicTag.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH);
+			// For some reason, the following line stopped working, only returning the empty
+			// string. This is NOT good as the solution with getTrackLength() does NOT
+			// support milliseconds...
+			//return musicTag.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH); 
+			return musicHeader.getTrackLength() + "";
 		}
 		return DataClass.ERROR_STRING;
 	}
