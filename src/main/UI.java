@@ -553,6 +553,7 @@ public class UI extends JFrame {
     	try {
     		mtpDevice.open();
     	} catch (DeviceAlreadyOpenedException e) { // Do nothing
+    		System.err.println(getClass().getName() + ": Device already open!");
     	}
     	UIForMTPFileSystem uiMTP = new UIForMTPFileSystem(mtpDevice, this); // Initiate MTP folder dialog
 		String strFolder = uiMTP.showDialog(); // Wait till a folder has been chosen.
