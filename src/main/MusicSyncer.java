@@ -31,10 +31,11 @@ import framework.StateDeviceStrategy;
 public class MusicSyncer {
     private final FileWrapper srcFolder;
     private final FileWrapper dstFolder;
-    private boolean optionAddNewMusic;
-    private boolean optionDeleteOrphanedMusic;
-    private boolean optionSearchInSubdirectories;
-    private final SimpleAttributeSet attr;
+    // Options are false by default.
+    private boolean optionAddNewMusic = false;
+    private boolean optionDeleteOrphanedMusic = false;
+    private boolean optionSearchInSubdirectories = false;
+    private final SimpleAttributeSet attr = new SimpleAttributeSet();
     private final DeviceStrategy srcStrategy;
     private final DeviceStrategy dstStrategy;
     private final StateDeviceStrategy stateDeviceStrategy;
@@ -58,23 +59,17 @@ public class MusicSyncer {
 	private boolean isDstDevice;
     
     public MusicSyncer(String srcFolderStr, String dstFolderStr, boolean isSrcDevice, boolean isDstDevice) {
-    	srcFolderStr = srcFolderStr.replace('\\', '/');
-    	dstFolderStr = dstFolderStr.replace('\\', '/');
+    	//srcFolderStr = srcFolderStr.replace('\\', '/');
+    	//dstFolderStr = dstFolderStr.replace('\\', '/');
     	this.isSrcDevice = isSrcDevice;
     	this.isDstDevice = isDstDevice;
     	srcStrategy = (isSrcDevice ? new MTPDeviceStrategy(srcFolderStr) : new PCDeviceStrategy(srcFolderStr));
     	dstStrategy = (isDstDevice ? new MTPDeviceStrategy(dstFolderStr) : new PCDeviceStrategy(dstFolderStr));
     	// TODO Statedevicestrat is ONLY used to determine whether to use mtp strat. or pc strat when copying...
-		stateDeviceStrategy = new SwitchBetweenDevicesStrategy(srcStrategy, dstStrategy, isSrcDevice);
+		stateDeviceStrategy = new SwitchBetweenDevicesStrategy(srcStrategy, dstStrategy, isSrcDevice, isDstDevice);
     	//deviceStrategy.setToPCOrDevice(false); // Default value.
     	srcFolder = srcStrategy.getFolder();
     	dstFolder = dstStrategy.getFolder();
-        // Options are false by default.
-        optionAddNewMusic = false;
-        optionDeleteOrphanedMusic = false;
-        optionSearchInSubdirectories = false;
-        optionSearchInSubdirectories = false;
-        attr = new SimpleAttributeSet();
     }
     
     /**
@@ -213,7 +208,7 @@ public class MusicSyncer {
                 
                 
                 
-                FileWrapper fileInDst = dstStrategy.getFileInstance(dstFolder.getAbsolutePath() + "\\" + strFile);
+                FileWrapper fileInDst = dstStrategy.getFileInstance(dstFolder.getAbsolutePath() + File.separatorChar + strFile);
                 if (wasFileLocated && !hasBeenModified) {
                     UI.updateProgressBar(2);
                     continue;
@@ -265,52 +260,63 @@ public class MusicSyncer {
                 throw new InterruptedException();
             }
             // Create a FileWrapper of the file at destination.
-            FileWrapper fileDst = dstStrategy.getFileInstance(dstFolder.getAbsolutePath() + "\\" + fileSrc.getName());
+            FileWrapper fileDst = dstStrategy.getFileInstance(dstFolder.getAbsolutePath() + File.separatorChar + fileSrc.getName());
             
 			// Before getting every relevant metadata, we check the length of both music
 			// files. If the mod. version is not the same, then the music data has been
 			// modified. The only fix is to replace and return.
-            if (!fileSrc.getDuration().equals(fileDst.getDuration())) {
-            	listOfNewMusic.add(fileSrc);
-            }
-            else {
-            	// Get each relevant tag from src and dst version of the file and save
-                // them in lists for later comparisons.
-            	for (FieldKey fieldKey : listOfFieldKeys) {
-            		final String tagValueSrc = fileSrc.getTagData(fieldKey);
-                	final String tagValueDst = fileDst.getTagData(fieldKey);
-					if (!tagValueSrc.equals(DataClass.ERROR_STRING) && !tagValueDst.equals(DataClass.ERROR_STRING)
-							&& !tagValueSrc.equals(tagValueDst)) {
-                		fileDst.changeTag(fieldKey, tagValueSrc);
-                	}
-            	}
-				// Artworks, however, are a special case. Notice that we are only interested in
-				// the first artwork as the others are assumed to be mistakes since they are not
-				// shown when the music is played.
-            	
-            	// TODO This check is very, very necessary as I can only
-            	// acquire artwork if the music is on the pc. If it's on an MTP
-            	// device, then I have yet to find a method on how to get it.
-            	// jmtp is not documented at all...
-            	if (!isSrcDevice && !isDstDevice) {
-	                final Artwork srcArtwork = fileSrc.getAlbumArt();
-	                final Artwork dstArtwork = fileDst.getAlbumArt();
-	                if (srcArtwork != null && dstArtwork == null) {
-	                	fileDst.changeAlbumArt(srcArtwork);
-	                } else if (srcArtwork == null && dstArtwork != null) {
-	                	fileDst.changeAlbumArt(null); // Delete artwork
-	                } else if (srcArtwork != null && dstArtwork != null) {
-	                    // Only get the first artwork.
-	                    byte[] srcArtworkArr = srcArtwork.getBinaryData();
-	                    byte[] dstArtworkArr = dstArtwork.getBinaryData();
-	                    if (!Arrays.equals(srcArtworkArr, dstArtworkArr)) {
-	                    	fileDst.changeAlbumArt(null); // Delete dst artwork first
-	                    	fileDst.changeAlbumArt(srcArtwork); // Add new artwork from src.
-	                    }
-	                }
-            	}
-            	fileDst.applyTagChanges();
-            }
+            
+            // TODO jmtp does not seem to support m4a files even though they have WPD information.
+            // So, m4a files are skipped for now...
+            final int fileExtIndex = fileSrc.getName().lastIndexOf("."); // If no extension, this will default to -1.
+            final String strExt = fileSrc.getName().substring(fileExtIndex + 1);
+        	if (strExt.toUpperCase().equals("MP3")) {
+        		// TODO added space to differentiate between necessary code (below)
+        		// and temporary library-constrains-me-again code (above)
+        		
+        		
+	            if (!fileSrc.getDuration().equals(fileDst.getDuration())) {
+	            	listOfNewMusic.add(fileSrc);
+	            }
+	            else {
+	            	// Get each relevant tag from src and dst version of the file and save
+	                // them in lists for later comparisons.
+	            	for (FieldKey fieldKey : listOfFieldKeys) {
+	            		final String tagValueSrc = fileSrc.getTagData(fieldKey);
+	                	final String tagValueDst = fileDst.getTagData(fieldKey);
+						if (!tagValueSrc.equals(DataClass.ERROR_STRING) && !tagValueDst.equals(DataClass.ERROR_STRING)
+								&& !tagValueSrc.equals(tagValueDst)) {
+	                		fileDst.changeTag(fieldKey, tagValueSrc);
+	                	}
+	            	}
+					// Artworks, however, are a special case. Notice that we are only interested in
+					// the first artwork as the others are assumed to be mistakes since they are not
+					// shown when the music is played.
+	            	
+	            	// TODO This check is very, very necessary as I can only
+	            	// acquire artwork if the music is on the pc. If it's on an MTP
+	            	// device, then I have yet to find a method on how to get it.
+	            	// jmtp is not documented at all...
+	            	if (!isSrcDevice && !isDstDevice) {
+		                final Artwork srcArtwork = fileSrc.getAlbumArt();
+		                final Artwork dstArtwork = fileDst.getAlbumArt();
+		                if (srcArtwork != null && dstArtwork == null) {
+		                	fileDst.changeAlbumArt(srcArtwork);
+		                } else if (srcArtwork == null && dstArtwork != null) {
+		                	fileDst.changeAlbumArt(null); // Delete artwork
+		                } else if (srcArtwork != null && dstArtwork != null) {
+		                    // Only get the first artwork.
+		                    byte[] srcArtworkArr = srcArtwork.getBinaryData();
+		                    byte[] dstArtworkArr = dstArtwork.getBinaryData();
+		                    if (!Arrays.equals(srcArtworkArr, dstArtworkArr)) {
+		                    	fileDst.changeAlbumArt(null); // Delete dst artwork first
+		                    	fileDst.changeAlbumArt(srcArtwork); // Add new artwork from src.
+		                    }
+		                }
+	            	}
+	            	fileDst.applyTagChanges();
+	            }
+        	}
             UI.updateProgressBar(2);
         }
     }
@@ -409,12 +415,12 @@ public class MusicSyncer {
             // Check if it's music first. If it is not, then skip it.
             final String strFile = fileEntryDst.getName();
             final int fileExtIndex = strFile.lastIndexOf("."); // If no extension, this will default to -1.
-            final String strExt = strFile.substring(fileExtIndex + 1); 
+            final String strExt = strFile.substring(fileExtIndex + 1);
             switch (strExt.toUpperCase()) {
             // Exploit the concept of fallthrough.
             case "MP3":
             case "M4A":
-				FileWrapper fileOnSrc = srcStrategy.getFileInstance(pathToFolder + "\\" + fileEntryDst.getName());
+				FileWrapper fileOnSrc = srcStrategy.getFileInstance(pathToFolder + File.separatorChar + fileEntryDst.getName());
 	            if (fileOnSrc.doesFileExist()) {
 	                continue;
 	            }
@@ -497,8 +503,8 @@ public class MusicSyncer {
      *            - the last modified date of the file.
      */
     private void updateCurrentSession(StringBuilder currentSession, String strFile, long fileLastMod) {
-        currentSession.append(strFile + "\n");
-        currentSession.append(fileLastMod + "\n");
+        currentSession.append(strFile + System.lineSeparator());
+        currentSession.append(fileLastMod + System.lineSeparator());
     }
     
     public void setAddNewMusicOption(boolean option) {
