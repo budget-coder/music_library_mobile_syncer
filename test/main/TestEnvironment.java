@@ -9,6 +9,18 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 
+import org.jaudiotagger.audio.AudioFile;
+import org.jaudiotagger.audio.AudioFileIO;
+import org.jaudiotagger.audio.AudioHeader;
+import org.jaudiotagger.audio.exceptions.CannotReadException;
+import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
+import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
+import org.jaudiotagger.audio.mp3.MP3File;
+import org.jaudiotagger.tag.FieldKey;
+import org.jaudiotagger.tag.Tag;
+import org.jaudiotagger.tag.TagException;
+import org.jaudiotagger.tag.id3.ID3v23Frames;
+
 import be.derycke.pieter.com.COMException;
 import filesystem.MTPFile;
 import jmtp.PortableDevice;
@@ -32,6 +44,59 @@ public class TestEnvironment {
         //devices[0].open(); // TODO Show list to user...
         testLocateAndPrintMusicTags(mtpDevice);
         //testRecursiveFolderLookup(mtpDevice);
+        //testCreateFolder(mtpDevice);
+        //testGetPCTag();
+    }
+    
+	private static void testGetPCTag() {
+		File filemp3 = new File("C:\\Users\\Aram\\Overførsler\\[TEST TEST TEST TEST\\temp-musik\\kalimba-thumbnail.mp3");
+    	File filem4a = new File("C:\\Users\\Aram\\Overførsler\\[TEST TEST TEST TEST\\temp-musik\\Hurts - Mercy.m4a");
+    	if (filem4a.exists()) {
+    		System.out.println("File " + filem4a.getName() + " exists");
+    		Tag musicTag;
+    		try {
+    			MP3File mp3File = (MP3File) AudioFileIO.read(filemp3);
+				musicTag = mp3File.getID3v2Tag();
+				String duration = musicTag.getFirst(ID3v23Frames.FRAME_ID_V3_LENGTH);
+				System.out.println("duration of file is " + duration + " seconds");
+				
+				
+				AudioHeader audioHeaderAll = AudioFileIO.read(filem4a).getAudioHeader();
+				
+				System.out.println("Or wait! Maybe it is " + mp3File.getAudioHeader().getTrackLength());
+				System.out.println("or or, maybe it is " + audioHeaderAll.getTrackLength());
+			} catch (CannotReadException | IOException | TagException | ReadOnlyFileException
+					| InvalidAudioFrameException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+    	} else {
+    		System.err.println("File " + filem4a.getName() + " does NOT exist");
+    	}
+    }
+    
+    private static void testCreateFolder(PortableDevice mtpDevice) {
+    	for (PortableDeviceStorageObject storage : MTPUtil.getDeviceStorages(mtpDevice)) {
+    		if (!storage.getName().equals("SD-kort")) {
+    			continue;
+    		}
+    		String path1 = "MusicTEST\\DEEPER";
+    		String path2 = "MusicTEST\\DEEPER\\EVEN DEEPER";
+    		//System.out.println("lastindexof is " + path1.lastIndexOf(File.separatorChar) + 1);
+    		String lastpartofpath = path2.substring(path2.lastIndexOf(File.separatorChar) + 1);
+    		if (!lastpartofpath.equals("")) {
+    			System.out.println("Lastpartofpath is " + lastpartofpath);
+	    		PortableDeviceFolderObject folder = MTPUtil.createFolder(path2, storage, null, lastpartofpath);
+	    		
+	    		if (folder != null) {
+	    			System.out.println("Folder IS NOT null");
+	    		} else {
+	    			System.out.println("Folder IS null");
+	    		}
+    		} else {
+    			System.err.println("lastpartofpath was empty");
+    		}
+    	}
     }
     
     private static void testRecursiveFolderLookup(PortableDevice mtpDevice) {
@@ -97,6 +162,8 @@ public class TestEnvironment {
 						*/
 						System.out.println();
 						System.out.println();
+						((PortableDeviceAudioObject) deviceObj).setArtist("bitch");
+						//audioFile.setArtist("get nop'ed");
 					} else {
 						System.out.println("The file is NOT an audio instance...");
 					}
