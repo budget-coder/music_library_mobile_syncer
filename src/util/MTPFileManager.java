@@ -36,11 +36,11 @@ public class MTPFileManager {
     public void closeDevice() {
         if (device != null) {
             device.close();
-            device = null;
         }
     }
 
     //public synchronized boolean isOpen() {
+    // TODO This implementation is plain wrong.
     public boolean isOpen() {
         if (device != null) {
             return true;
@@ -56,14 +56,14 @@ public class MTPFileManager {
             throws FileNotFoundException, IOException, COMException {
         deleteFile(file.getName(), mtpPath);
         String lastpartofpath = mtpPath
-                .substring(mtpPath.lastIndexOf("\\") + 1);
+                .substring(mtpPath.lastIndexOf(File.separatorChar) + 1);
         PortableDeviceStorageObject storage = getStorage();
         PortableDeviceFolderObject folder = MTPUtil.createFolder(mtpPath,
                 storage, null, lastpartofpath);
 
         // PortableDeviceAudioObject object = folder.addAudioObject(file, "--",
         // "--", new BigInteger("0"));
-        folder.addAudioObject(file, "--", "--", new BigInteger("0"));
+        folder.addAudioObject(file, "--", "--", BigInteger.ZERO);
         // LogUtil.debugPrint(LogUtil.LOG_LEVEL_LESS,
         // this.getClass().getSimpleName(), "Copied " + file.getAbsolutePath() +
         // " to " + mtpPath
@@ -72,7 +72,7 @@ public class MTPFileManager {
 
     public ArrayList<PortableDeviceObject> getFiles(String path)
             throws COMException {
-        String lastpartofpath = path.substring(path.lastIndexOf("\\") + 1);
+        String lastpartofpath = path.substring(path.lastIndexOf(File.separatorChar) + 1);
         PortableDeviceStorageObject storage = getStorage();
         PortableDeviceFolderObject folder = MTPUtil.createFolder(path, storage,
                 null, lastpartofpath);
@@ -87,7 +87,7 @@ public class MTPFileManager {
 
     public ArrayList<PortableDeviceObject> getNewFiles(Date lastChecked,
             String path) throws COMException {
-        String lastpartofpath = path.substring(path.lastIndexOf("\\") + 1);
+        String lastpartofpath = path.substring(path.lastIndexOf(File.separatorChar) + 1);
         PortableDeviceStorageObject storage = getStorage();
         PortableDeviceFolderObject folder = MTPUtil.createFolder(path, storage,
                 null, lastpartofpath);
@@ -110,9 +110,11 @@ public class MTPFileManager {
             return null; // this is not a storage device
         }
         PortableDeviceFolderObject folder;
-        String lastpartofpath = path.substring(path.lastIndexOf("\\") + 1);
+        String lastpartofpath = path.substring(path.lastIndexOf(File.separatorChar) + 1);
         if (!lastpartofpath.equals("")) {
+        	// TODO Why THE FUCK is createFolder called just to find a file?!
             folder = MTPUtil.createFolder(path, storage, null, lastpartofpath);
+            //System.out.println("Trying to find file " + name + " in path " + path + ". Last part of path is " + lastpartofpath);
 
             for (PortableDeviceObject object : folder.getChildObjects()) {
                 if (object.getOriginalFileName().equals(name)) {
@@ -144,7 +146,7 @@ public class MTPFileManager {
     }
 
     public void deleteAllFiles(String path) throws COMException {
-        String lastpartofpath = path.substring(path.lastIndexOf("\\") + 1);
+        String lastpartofpath = path.substring(path.lastIndexOf(File.separatorChar) + 1);
         PortableDeviceStorageObject storage = getStorage();
 
         PortableDeviceFolderObject folder = MTPUtil.createFolder(path, storage,
@@ -157,14 +159,14 @@ public class MTPFileManager {
     }
 
     public void createFolder(String path) throws COMException {
-        String lastpartofpath = path.substring(path.lastIndexOf("\\") + 1);
+        String lastpartofpath = path.substring(path.lastIndexOf(File.separatorChar) + 1);
         PortableDeviceStorageObject storage = getStorage();
         MTPUtil.createFolder(path, storage, null, lastpartofpath);
     }
 
     public ArrayList<String> getAllFilesByName(String path) {
         ArrayList<String> fileNames = new ArrayList<String>();
-        String lastpartofpath = path.substring(path.lastIndexOf("\\") + 1);
+        String lastpartofpath = path.substring(path.lastIndexOf(File.separatorChar) + 1);
         PortableDeviceStorageObject storage = getStorage();
 
         PortableDeviceFolderObject folder = MTPUtil.createFolder(path, storage,

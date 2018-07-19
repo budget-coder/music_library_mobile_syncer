@@ -1,5 +1,6 @@
 package util;
 
+import java.io.File;
 import java.util.ArrayList;
 
 //import de.aok.no.kopra.agnes.desktop.util.LogUtil;
@@ -22,16 +23,22 @@ public class MTPUtil {
     public static PortableDeviceFolderObject createFolder(String path,
             PortableDeviceStorageObject storage,
             PortableDeviceFolderObject folder, String lastDir) {
-    	path = path.substring((path.indexOf("\\") + 1), path.length());
-        if (path.indexOf("\\") != -1) {
-            String fileName = path.substring(0, path.indexOf("\\"));
+    	//path = path.substring((path.indexOf(File.separatorChar) + 1), path.length());
+        if (path.indexOf(File.separatorChar) != -1) {
+            String fileName = path.substring(0, path.indexOf(File.separatorChar));
             if (folder == null) {
+				// We were not given any parent folder. It is thus assumed that the first part
+				// of the path is the parent folder.
                 folderNew = (PortableDeviceFolderObject) getChildFileByName(storage, fileName);
+                //System.out.println("Found folder " + folderNew.getOriginalFileName());
                 if (folderNew == null) {
                     folderNew = storage.createFolderObject(fileName);
                     // LogUtil.debugPrint(LogUtil.LOG_LEVEL_FULL,MTPUtil.class.getSimpleName(),
                     // "Created Root Directory " + z);
                 }
+                // If we got here, then the path's first part was indeed the parent folder.
+                // It was visited, so we cut it out of the path variable before recursing.
+                path = path.substring((path.indexOf(File.separatorChar) + 1), path.length());
                 return createFolder(path, storage, folderNew, lastDir);
             } else {
                 folderNew = (PortableDeviceFolderObject) getChildFolderByName(folder, fileName);
@@ -98,11 +105,11 @@ public class MTPUtil {
     	PortableDeviceObject nextFileObj;
     	String currFolder = "";
     	do {
-    		final int indexOfSeperator = pathToChild.indexOf('/');
+    		final int indexOfSeperator = pathToChild.indexOf(File.separatorChar);
     		// If and only if there are more separators, then use the index of the next one.
     		if (indexOfSeperator >= 0) {
-    			currFolder = pathToChild.substring(0, pathToChild.indexOf('/'));
-    			pathToChild = pathToChild.substring(currFolder.length()+1); // Again, +1 for skipping separator '/'
+    			currFolder = pathToChild.substring(0, pathToChild.indexOf(File.separatorChar));
+    			pathToChild = pathToChild.substring(currFolder.length()+1); // Again, +1 for skipping separator
     		} else {
     			// No separator found i.e. we must have gotten to the last folder.
     			currFolder = pathToChild;
@@ -123,17 +130,17 @@ public class MTPUtil {
     public static PortableDeviceObject getChildFileByNameRecursively(
     		PortableDeviceStorageObject storage, String pathToChild) {
     	String currFolder = "";
-    	// If no '/' is found, then the path only consists of one folder
-    	if (pathToChild.indexOf('/') <= 0) {
+    	// If no separator is found, then the path only consists of one folder
+    	if (pathToChild.indexOf(File.separatorChar) <= 0) {
     		currFolder = pathToChild;
     		return (PortableDeviceFolderObject) MTPUtil.getChildFileByName(storage, currFolder);
     	}
     	// If we got here, then the path consists of multiple folders which means we can recurse!
-    	currFolder = pathToChild.substring(0, pathToChild.indexOf('/'));
+    	currFolder = pathToChild.substring(0, pathToChild.indexOf(File.separatorChar));
     	PortableDeviceFolderObject nextFolderObj = (PortableDeviceFolderObject) MTPUtil.getChildFileByName(storage, currFolder);
     	// Iterate through the rest of the folders, if any
-    	String nextFolders = pathToChild.substring(currFolder.length()+1); // Skip the first folder. +1 skips '/'
-    	// If the path is "", then the first folder was just post-fixed with '/'. Return resultant folder.
+    	String nextFolders = pathToChild.substring(currFolder.length()+1); // Skip the first folder. +1 skips separator
+    	// If the path is "", then the first folder was just post-fixed with separator. Return resultant folder.
     	if (nextFolders.isEmpty()) {
     		return nextFolderObj;
     	}
