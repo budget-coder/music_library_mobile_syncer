@@ -23,11 +23,16 @@ Tag mappings: https://picard.musicbrainz.org/docs/mappings/
 - ~~Add interrupt checking.~~
 - The current library, jMTPe, doesn't <i>seem</i> to support anything other than .mp3 (i.e. .m4a files won't be recognized). Using WpdInfo tool to select an .m4a file reveals that <b>not all</b> the tags are shown anyways, leading me to believe that Microsoft's WPD API, one way or the other, doesn't support dissecting anything other than .mp3 audio files...
 - Make it work for nested folders
-- BUG: if a music piece cannot be added to the dst, then it will think it succeeded when the program is opened next time. This is because the music's name and last modified date is added to MLMS_LastSession.txt regardless of the result. (This might also apply to unsuccessful deletions.)
 - ~~somehow handle music on mobile with different time zone than the PC (e.g. my music' modified date is 1 hour behind the same music on the PC). *SOLUTION:* Use hashes (fastest is best)!~~
 - ~~add auto-scroll ability~~
 - ~~Have computer stay awake when it is synchronizing~~
-- ISSUE: 
+
+    
+## Known bugs <br/>
+- If a music piece cannot be added to the dst, then it will think it succeeded when the program is opened next time. This is because the music's name and last modified date is added to MLMS_LastSession.txt regardless of the result. (This might also apply to unsuccessful deletions.)
+- The library jmtpe has a class PortableDevice which represents MTP devices. Its implementation of the close() method (given by PortableDeviceImplWin32.class) does <b>NOT</b> work. The consequence is that once a device has been opened, it is not fully closed until program execution stops. 
+- <b>Won't fix:</b>
+    - Progress bar reaches 100 % faster than it should if the destination folder contains 1 or more non-music files. This is only an aesthetic bug; synchronization won't finish before all music files have been checked. (This is also seen by the fact that the start/stop button still says "Stop!").
 
 ## License <br/>
 MLMS is primarily distributed under the terms of GPL-3.0.
